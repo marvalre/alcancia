@@ -63,7 +63,10 @@ Un control de gastos personal, local, que vive en la barra de menú.
 ```swift
 public enum EntryKind: String, Codable { case expense, income }
 
-public enum Category: String, Codable, CaseIterable {
+public enum ExpenseCategory: String, Codable, CaseIterable {
+    // No se llama `Category` a secas porque `objc/runtime.h` ya declara
+    // su propio typedef `Category`, y el nombre corto queda ambiguo en
+    // cualquier archivo que importe SwiftUI y AlcanciaCore a la vez.
     case comida, mercado, transporte, casa, software, ocio, salud, otro
     // Cada una expone `emoji` y `label` en español.
 }
@@ -76,7 +79,7 @@ public struct Entry: Identifiable, Codable, Equatable {
     public var exchangeRateUsed: Double?
     public var date: Date
     public var kind: EntryKind          // NUEVO
-    public var category: Category?      // NUEVO — nil en ingresos
+    public var category: ExpenseCategory?      // NUEVO — nil en ingresos
     public var note: String?            // NUEVO — concepto libre, corto
 }
 
@@ -86,7 +89,7 @@ public struct AlcanciaData: Codable {
     public var lastKnownUSDMXNRate: Double?
     public var lastKnownRateDate: Date?
     public var launchAtLogin: Bool
-    public var lastUsedCategory: Category?  // NUEVO — para captura rápida
+    public var lastUsedCategory: ExpenseCategory?  // NUEVO — para captura rápida
     public var showsDesktopPanel: Bool      // NUEVO
     public var desktopPanelOrigin: [Double]? // NUEVO — [x, y] recordado
 }
@@ -162,7 +165,7 @@ public struct MonthlySummary {
     public var entriesInMonth: [Entry]      // más reciente primero
 }
 
-public struct CategoryTotal { let category: Category; let amountMXN: Decimal;
+public struct CategoryTotal { let category: ExpenseCategory; let amountMXN: Decimal;
                               let fractionOfTotal: Double }
 ```
 
@@ -238,7 +241,7 @@ separada de la presentación.
 Sources/
   AlcanciaCore/
     Entry.swift              (Entry, Currency, EntryKind — decodificación tolerante)
-    Category.swift           (NUEVO — enum con emoji y etiqueta)
+    ExpenseCategory.swift    (NUEVO — enum con emoji y etiqueta)
     BudgetProgress.swift     (NUEVO — reemplaza GoalProgress.swift)
     MonthlySummary.swift     (NUEVO — totales del mes y desglose)
     AlcanciaStore.swift      (presupuesto, categorías, consultas por mes)
