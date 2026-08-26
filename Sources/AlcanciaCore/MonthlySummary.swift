@@ -1,14 +1,14 @@
 import Foundation
 
 public struct CategoryTotal: Identifiable, Equatable {
-    public let category: Category
+    public let category: ExpenseCategory
     public let amountMXN: Decimal
     /// Parte del gasto total del mes, de 0 a 1, para dibujar la barra.
     public let fractionOfTotal: Double
 
     public var id: String { category.rawValue }
 
-    public init(category: Category, amountMXN: Decimal, fractionOfTotal: Double) {
+    public init(category: ExpenseCategory, amountMXN: Decimal, fractionOfTotal: Double) {
         self.category = category
         self.amountMXN = amountMXN
         self.fractionOfTotal = fractionOfTotal
@@ -30,6 +30,11 @@ public struct MonthlySummary {
 
         let monthComps = calendar.dateComponents([.year, .month], from: month)
 
+        // Se compara por componentes (año y mes) a propósito, en vez de armar
+        // un `dateInterval(of: .month, for:)` y usar `contains`: ese `contains`
+        // es cerrado en `end`, así que el primer instante del mes siguiente
+        // (p. ej. 1 de septiembre 00:00) contaría como parte de agosto.
+        // `testOnlyEntriesInsideTheMonthCount` fija este comportamiento.
         let inMonth = entries
             .filter { entry in
                 let entryComps = calendar.dateComponents([.year, .month], from: entry.date)
@@ -45,7 +50,7 @@ public struct MonthlySummary {
             .filter { $0.kind == .income }
             .reduce(Decimal(0)) { $0 + $1.amountInMXN }
 
-        var totals: [Category: Decimal] = [:]
+        var totals: [ExpenseCategory: Decimal] = [:]
         for expense in expenses {
             // Un gasto sin categoría cuenta como "Otro" en vez de desaparecer
             // del desglose.
@@ -76,6 +81,6 @@ public struct MonthlySummary {
     }
 }
 
-private func categoryOrder(_ category: Category) -> Int {
-    Category.allCases.firstIndex(of: category) ?? Category.allCases.count
+private func categoryOrder(_ category: ExpenseCategory) -> Int {
+    ExpenseCategory.allCases.firstIndex(of: category) ?? ExpenseCategory.allCases.count
 }

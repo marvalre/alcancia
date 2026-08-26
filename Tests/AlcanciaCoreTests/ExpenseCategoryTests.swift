@@ -1,9 +1,9 @@
 import XCTest
 @testable import AlcanciaCore
 
-final class CategoryTests: XCTestCase {
+final class ExpenseCategoryTests: XCTestCase {
     func testEveryCategoryHasEmojiAndLabel() {
-        for category in Category.allCases {
+        for category in ExpenseCategory.allCases {
             XCTAssertFalse(category.emoji.isEmpty, "\(category) sin emoji")
             XCTAssertFalse(category.label.isEmpty, "\(category) sin etiqueta")
         }
@@ -11,7 +11,7 @@ final class CategoryTests: XCTestCase {
 
     func testCategoryOrderIsStableForThePicker() {
         XCTAssertEqual(
-            Category.allCases,
+            ExpenseCategory.allCases,
             [.comida, .mercado, .transporte, .casa, .software, .ocio, .salud, .otro]
         )
     }

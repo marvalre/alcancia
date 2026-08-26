@@ -15,7 +15,7 @@ final class MonthlySummaryTests: XCTestCase {
         ))!
     }
 
-    private func expense(_ amount: Decimal, _ category: AlcanciaCore.Category, on date: Date) -> Entry {
+    private func expense(_ amount: Decimal, _ category: AlcanciaCore.ExpenseCategory, on date: Date) -> Entry {
         Entry(amount: amount, currency: .mxn, amountInMXN: amount,
               date: date, kind: .expense, category: category)
     }

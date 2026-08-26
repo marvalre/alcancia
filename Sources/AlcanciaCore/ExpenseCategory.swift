@@ -3,7 +3,7 @@ import Foundation
 /// Las categorías de gasto. Son fijas a propósito: elegir de ocho emojis es
 /// un clic, y mantener la captura por debajo de tres segundos manda sobre la
 /// flexibilidad de tener categorías personalizadas.
-public enum Category: String, Codable, CaseIterable, Identifiable, Sendable {
+public enum ExpenseCategory: String, Codable, CaseIterable, Identifiable, Sendable {
     case comida
     case mercado
     case transporte

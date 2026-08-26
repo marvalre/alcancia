@@ -5,15 +5,11 @@ import AlcanciaCore
 /// Las ocho categorías en una fila de emojis. Elegir es un clic, no un menú
 /// desplegable — la diferencia entre capturar en tres segundos o en diez.
 struct CategoryRowView: View {
-    // Calificado explícitamente: en este SDK, objc/runtime.h también expone un
-    // tipo `Category` a nivel global, y este archivo importa SwiftUI (que
-    // arrastra AppKit) junto con AlcanciaCore — sin calificar, el nombre queda
-    // ambiguo y el build falla.
-    @Binding var selection: AlcanciaCore.Category
+    @Binding var selection: ExpenseCategory
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(AlcanciaCore.Category.allCases) { category in
+            ForEach(ExpenseCategory.allCases) { category in
                 Button {
                     selection = category
                 } label: {

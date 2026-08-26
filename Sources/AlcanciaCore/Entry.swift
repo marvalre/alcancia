@@ -18,7 +18,7 @@ public struct Entry: Identifiable, Codable, Equatable {
     public var exchangeRateUsed: Double?
     public var date: Date
     public var kind: EntryKind
-    public var category: Category?
+    public var category: ExpenseCategory?
     public var note: String?
 
     public init(
@@ -29,7 +29,7 @@ public struct Entry: Identifiable, Codable, Equatable {
         exchangeRateUsed: Double? = nil,
         date: Date = Date(),
         kind: EntryKind = .expense,
-        category: Category? = nil,
+        category: ExpenseCategory? = nil,
         note: String? = nil
     ) {
         self.id = id
@@ -55,7 +55,7 @@ public struct Entry: Identifiable, Codable, Equatable {
         // `kind` viene de la versión que sólo registraba dinero ganado, así que
         // se lee como ingreso — nunca como gasto, que falsearía los totales.
         kind = try container.decodeIfPresent(EntryKind.self, forKey: .kind) ?? .income
-        category = try container.decodeIfPresent(Category.self, forKey: .category)
+        category = try container.decodeIfPresent(ExpenseCategory.self, forKey: .category)
         note = try container.decodeIfPresent(String.self, forKey: .note)
     }
 }

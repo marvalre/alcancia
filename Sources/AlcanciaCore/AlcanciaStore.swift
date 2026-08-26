@@ -12,7 +12,7 @@ public struct AlcanciaData: Codable {
     public var lastKnownUSDMXNRate: Double?
     public var lastKnownRateDate: Date?
     public var launchAtLogin: Bool
-    public var lastUsedCategory: Category?
+    public var lastUsedCategory: ExpenseCategory?
     public var showsDesktopPanel: Bool
     /// [x, y] de la esquina del panel flotante, para restaurarlo donde quedó.
     public var desktopPanelOrigin: [Double]?
@@ -24,7 +24,7 @@ public struct AlcanciaData: Codable {
         lastKnownUSDMXNRate: Double? = nil,
         lastKnownRateDate: Date? = nil,
         launchAtLogin: Bool = false,
-        lastUsedCategory: Category? = nil,
+        lastUsedCategory: ExpenseCategory? = nil,
         showsDesktopPanel: Bool = false,
         desktopPanelOrigin: [Double]? = nil
     ) {
@@ -51,7 +51,7 @@ public struct AlcanciaData: Codable {
         lastKnownUSDMXNRate = try container.decodeIfPresent(Double.self, forKey: .lastKnownUSDMXNRate)
         lastKnownRateDate = try container.decodeIfPresent(Date.self, forKey: .lastKnownRateDate)
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
-        lastUsedCategory = try container.decodeIfPresent(Category.self, forKey: .lastUsedCategory)
+        lastUsedCategory = try container.decodeIfPresent(ExpenseCategory.self, forKey: .lastUsedCategory)
         showsDesktopPanel = try container.decodeIfPresent(Bool.self, forKey: .showsDesktopPanel) ?? false
         desktopPanelOrigin = try container.decodeIfPresent([Double].self, forKey: .desktopPanelOrigin)
     }
@@ -122,7 +122,7 @@ public final class AlcanciaStore: ObservableObject {
         amount: Decimal,
         currency: Currency,
         kind: EntryKind = .expense,
-        category: Category? = nil,
+        category: ExpenseCategory? = nil,
         note: String? = nil,
         exchangeRate: Double? = nil,
         date: Date = Date()
@@ -176,7 +176,7 @@ public final class AlcanciaStore: ObservableObject {
         save()
     }
 
-    public func setLastUsedCategory(_ category: Category) {
+    public func setLastUsedCategory(_ category: ExpenseCategory) {
         data.lastUsedCategory = category
         save()
     }

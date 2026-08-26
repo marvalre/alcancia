@@ -14,9 +14,7 @@ struct QuickAddView: View {
     @State private var noteText: String = ""
     @State private var kind: EntryKind = .expense
     @State private var currency: Currency = .mxn
-    // Calificado explícitamente: ver nota en CategoryRowView.swift sobre la
-    // ambigüedad con objc/runtime.h en este SDK.
-    @State private var category: AlcanciaCore.Category = .otro
+    @State private var category: ExpenseCategory = .otro
     @State private var isResolvingRate = false
     @State private var needsManualRate = false
     @State private var manualRateText: String = ""
