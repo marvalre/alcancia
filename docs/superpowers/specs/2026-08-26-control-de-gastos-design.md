@@ -191,8 +191,10 @@ del presupuesto. Sin texto, sin signo de pesos.
    con la que esté activa.
 4. **Selector de vista.** `Movimientos` | `Por categoría`.
    - *Movimientos*: lista del mes — emoji, concepto, fecha, monto con
-     signo y color (gasto rojo, ingreso verde), botón de borrar con
-     confirmación.
+     signo (− gasto, + ingreso); el gasto va en el color normal del
+     texto y el ingreso en verde, porque en una app de gastos casi toda
+     fila es un gasto y pintarlas todas de rojo no aporta señal. Botón
+     de borrar con confirmación.
    - *Por categoría*: una fila por categoría con gasto — emoji, nombre,
      monto, y una barra proporcional al total del mes.
 5. **Pie.** Engrane (ajustes) y Salir.

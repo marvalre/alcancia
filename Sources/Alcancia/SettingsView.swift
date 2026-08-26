@@ -47,17 +47,7 @@ struct SettingsView: View {
                     store.setShowsDesktopPanel(newValue)
                 }
 
-            Toggle("Iniciar con el sistema", isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, newValue in
-                    let succeeded = LoginItemManager.setEnabled(newValue)
-                    if succeeded {
-                        store.setLaunchAtLogin(newValue)
-                        loginItemError = nil
-                    } else {
-                        loginItemError = "No se pudo cambiar el inicio automático. Revisa Ajustes del Sistema > Elementos de inicio."
-                        syncLaunchAtLoginFromSystem()
-                    }
-                }
+            Toggle("Iniciar con el sistema", isOn: launchAtLoginBinding)
 
             if let loginItemError {
                 Text(loginItemError).font(.caption).foregroundStyle(.red)
@@ -89,20 +79,39 @@ struct SettingsView: View {
                 budgetText = "\(budget)"
             }
             showsDesktopPanel = store.data.showsDesktopPanel
-            syncLaunchAtLoginFromSystem()
+            // Sembramos el interruptor con el estado real del sistema, no la
+            // preferencia guardada, para que no pueda mentir si el registro
+            // había fallado en una sesión anterior.
+            let actual = LoginItemManager.isEnabled
+            launchAtLogin = actual
+            if store.data.launchAtLogin != actual {
+                store.setLaunchAtLogin(actual)
+            }
         }
     }
 
-    /// El interruptor refleja el estado real del sistema, no la preferencia
-    /// guardada, para que no pueda mentir si el registro falló.
-    private func syncLaunchAtLoginFromSystem() {
-        let actual = LoginItemManager.isEnabled
-        if launchAtLogin != actual {
-            launchAtLogin = actual
-        }
-        if store.data.launchAtLogin != actual {
-            store.setLaunchAtLogin(actual)
-        }
+    /// El interruptor se maneja con un Binding en vez de @State + .onChange: el
+    /// setter no puede reentrar a sí mismo, así que el mensaje de error sobrevive
+    /// a la corrección del valor. Con .onChange, reasignar el valor volvía a
+    /// disparar el manejador y la segunda pasada borraba el error.
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLogin },
+            set: { requested in
+                if LoginItemManager.setEnabled(requested) {
+                    launchAtLogin = requested
+                    store.setLaunchAtLogin(requested)
+                    loginItemError = nil
+                } else {
+                    // No escribimos lo que pidió el usuario: el interruptor se
+                    // queda donde de verdad está el sistema.
+                    let actual = LoginItemManager.isEnabled
+                    launchAtLogin = actual
+                    store.setLaunchAtLogin(actual)
+                    loginItemError = "No se pudo cambiar el inicio automático. Revisa Ajustes del Sistema > Elementos de inicio."
+                }
+            }
+        )
     }
 
     private func saveBudget() {
