@@ -69,7 +69,7 @@ struct HistoryView: View {
             }
             Spacer()
             if entry.currency == .usd {
-                Text("USD \(entry.amount)")
+                Text("USD \(entry.amount.description)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

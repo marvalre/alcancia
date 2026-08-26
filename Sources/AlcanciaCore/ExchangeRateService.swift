@@ -23,8 +23,10 @@ public struct FrankfurterExchangeRateFetcher: ExchangeRateFetching {
         guard let url = URL(string: "https://api.frankfurter.app/latest?from=USD&to=MXN") else {
             return nil
         }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await URLSession.shared.data(for: request)
             let decoded = try JSONDecoder().decode(FrankfurterResponse.self, from: data)
             return decoded.rates["MXN"]
         } catch {

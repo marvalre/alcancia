@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var goalText: String = ""
     @State private var launchAtLogin: Bool = false
     @State private var showingResetConfirmation = false
+    @State private var loginItemError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -41,9 +42,22 @@ struct SettingsView: View {
 
             Toggle("Iniciar con el sistema", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
-                    LoginItemManager.setEnabled(newValue)
-                    store.setLaunchAtLogin(newValue)
+                    let succeeded = LoginItemManager.setEnabled(newValue)
+                    if succeeded {
+                        store.setLaunchAtLogin(newValue)
+                        loginItemError = nil
+                    } else {
+                        launchAtLogin = LoginItemManager.isEnabled
+                        store.setLaunchAtLogin(launchAtLogin)
+                        loginItemError = "No se pudo cambiar el inicio automático. Revisa Ajustes del Sistema > Elementos de inicio."
+                    }
                 }
+
+            if let loginItemError {
+                Text(loginItemError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
 
             Divider()
 
@@ -70,7 +84,10 @@ struct SettingsView: View {
             if let goal = store.data.goalMXN {
                 goalText = "\(goal)"
             }
-            launchAtLogin = store.data.launchAtLogin
+            launchAtLogin = LoginItemManager.isEnabled
+            if launchAtLogin != store.data.launchAtLogin {
+                store.setLaunchAtLogin(launchAtLogin)
+            }
         }
     }
 

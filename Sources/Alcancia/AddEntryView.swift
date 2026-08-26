@@ -10,6 +10,7 @@ struct AddEntryView: View {
     @State private var needsManualRate = false
     @State private var manualRateText: String = ""
     @State private var errorMessage: String?
+    @State private var noticeMessage: String?
 
     private var parsedAmount: Decimal? {
         Decimal(string: amountText.replacingOccurrences(of: ",", with: ""))
@@ -24,6 +25,11 @@ struct AddEntryView: View {
             HStack(spacing: 8) {
                 TextField("Monto", text: $amountText)
                     .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        if !isAddDisabled {
+                            Task { await addEntry() }
+                        }
+                    }
                 Picker("Moneda", selection: $currency) {
                     Text("MXN").tag(Currency.mxn)
                     Text("USD").tag(Currency.usd)
@@ -34,6 +40,7 @@ struct AddEntryView: View {
                 .onChange(of: currency) { _, _ in
                     needsManualRate = false
                     errorMessage = nil
+                    noticeMessage = nil
                 }
             }
 
@@ -51,6 +58,12 @@ struct AddEntryView: View {
                 Text(errorMessage)
                     .font(.caption)
                     .foregroundStyle(.red)
+            }
+
+            if let noticeMessage {
+                Text(noticeMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Button {
@@ -84,6 +97,7 @@ struct AddEntryView: View {
     private func addEntry() async {
         guard let amount = parsedAmount, amount > 0 else { return }
         errorMessage = nil
+        noticeMessage = nil
 
         if currency == .mxn {
             store.addEntry(amount: amount, currency: .mxn)
@@ -115,10 +129,19 @@ struct AddEntryView: View {
             return
         }
 
-        if !result.isFromCache {
+        if result.isFromCache {
+            noticeMessage = "Tipo de cambio del \(Self.dateFormatter.string(from: result.asOf)), sin conexión."
+        } else {
             store.recordExchangeRate(result.rate, date: result.asOf)
         }
         store.addEntry(amount: amount, currency: .usd, exchangeRate: result.rate)
         amountText = ""
     }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.locale = Locale(identifier: "es_MX")
+        return formatter
+    }()
 }

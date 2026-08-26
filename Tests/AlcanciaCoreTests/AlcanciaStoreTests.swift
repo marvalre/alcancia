@@ -93,4 +93,14 @@ final class AlcanciaStoreTests: XCTestCase {
         store.addEntry(amount: 250, currency: .mxn)
         XCTAssertEqual(store.menuBarSummary, "25%")
     }
+
+    func testTotalStaysConsistentAcrossRepeatedAddAndDeleteCycles() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL())
+        for _ in 0..<5 {
+            let toDelete = store.addEntry(amount: 100, currency: .mxn)
+            store.addEntry(amount: 50, currency: .mxn)
+            store.deleteEntry(id: toDelete.id)
+        }
+        XCTAssertEqual(store.totalMXN, 250)
+    }
 }

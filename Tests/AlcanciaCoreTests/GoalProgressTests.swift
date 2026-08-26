@@ -25,4 +25,9 @@ final class GoalProgressTests: XCTestCase {
         XCTAssertEqual(progress.fraction ?? -1, 1.0, accuracy: 0.0001)
         XCTAssertEqual(progress.percentText, "120%")
     }
+
+    func testAbsurdlySmallGoalDoesNotCrash() {
+        let progress = GoalProgress(totalMXN: 1000, goalMXN: Decimal(string: "0.0000000000000000001")!)
+        XCTAssertEqual(progress.percentText, "999999999999%")
+    }
 }

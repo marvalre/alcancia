@@ -22,9 +22,10 @@ public struct GoalProgress {
     }
 
     /// Not capped — can exceed "100%" when the goal was surpassed.
+    /// Clamped to a safe ceiling so a pathological goal can't crash the app.
     public var percentText: String? {
-        guard let rawFraction else { return nil }
-        let percent = Int((rawFraction * 100).rounded())
-        return "\(percent)%"
+        guard let rawFraction, rawFraction.isFinite else { return nil }
+        let scaled = min((rawFraction * 100).rounded(), 999_999_999_999)
+        return "\(Int(scaled))%"
     }
 }
