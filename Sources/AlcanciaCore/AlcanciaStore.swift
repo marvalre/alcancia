@@ -1,24 +1,59 @@
+// Sources/AlcanciaCore/AlcanciaStore.swift
 import Foundation
+import CoreGraphics
 
 public struct AlcanciaData: Codable {
+    public var monthlyBudgetMXN: Decimal?
+    /// HEREDADO — la meta de ahorro de la versión anterior. Sigue aquí sólo
+    /// para que las vistas viejas compilen mientras se hace el cambio; se va
+    /// en la Tarea 7.
     public var goalMXN: Decimal?
     public var entries: [Entry]
     public var lastKnownUSDMXNRate: Double?
     public var lastKnownRateDate: Date?
     public var launchAtLogin: Bool
+    public var lastUsedCategory: Category?
+    public var showsDesktopPanel: Bool
+    /// [x, y] de la esquina del panel flotante, para restaurarlo donde quedó.
+    public var desktopPanelOrigin: [Double]?
 
     public init(
+        monthlyBudgetMXN: Decimal? = nil,
         goalMXN: Decimal? = nil,
         entries: [Entry] = [],
         lastKnownUSDMXNRate: Double? = nil,
         lastKnownRateDate: Date? = nil,
-        launchAtLogin: Bool = false
+        launchAtLogin: Bool = false,
+        lastUsedCategory: Category? = nil,
+        showsDesktopPanel: Bool = false,
+        desktopPanelOrigin: [Double]? = nil
     ) {
+        self.monthlyBudgetMXN = monthlyBudgetMXN
         self.goalMXN = goalMXN
         self.entries = entries
         self.lastKnownUSDMXNRate = lastKnownUSDMXNRate
         self.lastKnownRateDate = lastKnownRateDate
         self.launchAtLogin = launchAtLogin
+        self.lastUsedCategory = lastUsedCategory
+        self.showsDesktopPanel = showsDesktopPanel
+        self.desktopPanelOrigin = desktopPanelOrigin
+    }
+
+    /// Todo campo agregado después de la primera versión se decodifica con
+    /// `decodeIfPresent`. Un archivo viejo al que le falte cualquiera de ellos
+    /// tiene que abrirse igual: si falla, `AlcanciaStore.load` lo pone en
+    /// cuarentena y al usuario le parece que la app le borró su dinero.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        entries = try container.decodeIfPresent([Entry].self, forKey: .entries) ?? []
+        monthlyBudgetMXN = try container.decodeIfPresent(Decimal.self, forKey: .monthlyBudgetMXN)
+        goalMXN = try container.decodeIfPresent(Decimal.self, forKey: .goalMXN)
+        lastKnownUSDMXNRate = try container.decodeIfPresent(Double.self, forKey: .lastKnownUSDMXNRate)
+        lastKnownRateDate = try container.decodeIfPresent(Date.self, forKey: .lastKnownRateDate)
+        launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
+        lastUsedCategory = try container.decodeIfPresent(Category.self, forKey: .lastUsedCategory)
+        showsDesktopPanel = try container.decodeIfPresent(Bool.self, forKey: .showsDesktopPanel) ?? false
+        desktopPanelOrigin = try container.decodeIfPresent([Double].self, forKey: .desktopPanelOrigin)
     }
 }
 
@@ -27,6 +62,7 @@ public final class AlcanciaStore: ObservableObject {
     @Published public private(set) var data: AlcanciaData
 
     private let fileURL: URL
+    private let calendar: Calendar
 
     private static let currencyFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -38,8 +74,12 @@ public final class AlcanciaStore: ObservableObject {
         return formatter
     }()
 
-    public init(fileURL: URL = AlcanciaStore.defaultFileURL()) {
+    public init(
+        fileURL: URL = AlcanciaStore.defaultFileURL(),
+        calendar: Calendar = .current
+    ) {
         self.fileURL = fileURL
+        self.calendar = calendar
         self.data = Self.load(from: fileURL)
     }
 
@@ -53,14 +93,37 @@ public final class AlcanciaStore: ObservableObject {
         return dir.appendingPathComponent("data.json")
     }
 
-    public var totalMXN: Decimal {
-        data.entries.reduce(Decimal(0)) { $0 + $1.amountInMXN }
+    // MARK: - Consultas
+
+    public func summary(for month: Date) -> MonthlySummary {
+        MonthlySummary(entries: data.entries, month: month, calendar: calendar)
     }
+
+    public func budgetProgress(for month: Date) -> BudgetProgress {
+        BudgetProgress(
+            spentMXN: summary(for: month).totalSpentMXN,
+            budgetMXN: data.monthlyBudgetMXN
+        )
+    }
+
+    /// Lo que lee VoiceOver del ícono de la barra de menú.
+    public func menuBarAccessibilityLabel(for month: Date) -> String {
+        let spent = formattedAmount(summary(for: month).totalSpentMXN)
+        guard let budget = data.monthlyBudgetMXN, budget > 0 else {
+            return "Gastado \(spent) este mes"
+        }
+        return "Gastado \(spent) de \(formattedAmount(budget)) este mes"
+    }
+
+    // MARK: - Movimientos
 
     @discardableResult
     public func addEntry(
         amount: Decimal,
         currency: Currency,
+        kind: EntryKind = .expense,
+        category: Category? = nil,
+        note: String? = nil,
         exchangeRate: Double? = nil,
         date: Date = Date()
     ) -> Entry {
@@ -75,14 +138,23 @@ public final class AlcanciaStore: ObservableObject {
             amountInMXN = amount * Decimal(rate)
             rateUsed = rate
         }
+
+        let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let entry = Entry(
             amount: amount,
             currency: currency,
             amountInMXN: amountInMXN,
             exchangeRateUsed: rateUsed,
-            date: date
+            date: date,
+            kind: kind,
+            category: kind == .expense ? (category ?? .otro) : nil,
+            note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote
         )
         data.entries.append(entry)
+        // Sólo los gastos mueven la categoría por defecto de la captura rápida.
+        if kind == .expense, let category {
+            data.lastUsedCategory = category
+        }
         save()
         return entry
     }
@@ -92,13 +164,30 @@ public final class AlcanciaStore: ObservableObject {
         save()
     }
 
-    public func setGoal(_ amount: Decimal?) {
-        data.goalMXN = amount
+    public func resetAllEntries() {
+        data.entries = []
         save()
     }
 
-    public func resetAllEntries() {
-        data.entries = []
+    // MARK: - Ajustes
+
+    public func setMonthlyBudget(_ amount: Decimal?) {
+        data.monthlyBudgetMXN = amount
+        save()
+    }
+
+    public func setLastUsedCategory(_ category: Category) {
+        data.lastUsedCategory = category
+        save()
+    }
+
+    public func setShowsDesktopPanel(_ shows: Bool) {
+        data.showsDesktopPanel = shows
+        save()
+    }
+
+    public func setDesktopPanelOrigin(_ origin: CGPoint?) {
+        data.desktopPanelOrigin = origin.map { [Double($0.x), Double($0.y)] }
         save()
     }
 
@@ -113,8 +202,25 @@ public final class AlcanciaStore: ObservableObject {
         save()
     }
 
+    // MARK: - Formato
+
     public func formattedAmount(_ amount: Decimal) -> String {
         Self.currencyFormatter.string(from: amount as NSDecimalNumber) ?? "$0"
+    }
+
+    // MARK: - Heredado (se elimina en la Tarea 7)
+    //
+    // Las vistas viejas todavía llaman a esto. `swift test` compila también el
+    // ejecutable, así que quitarlo ahora rompería la suite completa en vez de
+    // sólo la UI. Se va junto con su último llamador.
+
+    public func setGoal(_ amount: Decimal?) {
+        data.goalMXN = amount
+        save()
+    }
+
+    public var totalMXN: Decimal {
+        data.entries.reduce(Decimal(0)) { $0 + $1.amountInMXN }
     }
 
     public var formattedTotal: String {
@@ -123,11 +229,12 @@ public final class AlcanciaStore: ObservableObject {
 
     public var menuBarSummary: String {
         if let goalMXN = data.goalMXN, goalMXN > 0 {
-            let progress = GoalProgress(totalMXN: totalMXN, goalMXN: goalMXN)
-            return progress.percentText ?? formattedTotal
+            return GoalProgress(totalMXN: totalMXN, goalMXN: goalMXN).percentText ?? formattedTotal
         }
         return formattedTotal
     }
+
+    // MARK: - Persistencia
 
     private func save() {
         do {
