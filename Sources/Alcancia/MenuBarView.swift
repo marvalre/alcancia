@@ -1,47 +1,53 @@
+// Sources/Alcancia/MenuBarView.swift
 import SwiftUI
 import AlcanciaCore
 
 struct MenuBarView: View {
     @ObservedObject var store: AlcanciaStore
+
+    @State private var month = Date()
+    @State private var listMode: ListMode = .movimientos
     @State private var showingSettings = false
 
-    private var goalProgress: GoalProgress {
-        GoalProgress(totalMXN: store.totalMXN, goalMXN: store.data.goalMXN)
+    private enum ListMode: String, CaseIterable, Identifiable {
+        case movimientos = "Movimientos"
+        case categorias = "Por categoría"
+        var id: String { rawValue }
     }
+
+    private var summary: MonthlySummary { store.summary(for: month) }
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            MonthHeaderView(store: store, month: $month)
             Divider()
-            AddEntryView(store: store)
+            QuickAddView(store: store)
             Divider()
-            HistoryView(store: store)
+
+            Picker("Vista", selection: $listMode) {
+                ForEach(ListMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+
+            switch listMode {
+            case .movimientos:
+                HistoryView(store: store, summary: summary)
+            case .categorias:
+                CategoryBreakdownView(store: store, summary: summary)
+            }
+
             Divider()
             footer
         }
-        .frame(width: 320, height: 460)
+        .frame(width: 360, height: 560)
         .sheet(isPresented: $showingSettings) {
             SettingsView(store: store)
         }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(store.formattedTotal)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-
-            if let goalMXN = store.data.goalMXN, let fraction = goalProgress.fraction {
-                ProgressView(value: fraction)
-                Text("\(store.formattedTotal) de \(store.formattedAmount(goalMXN))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Sin meta definida")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(14)
     }
 
     private var footer: some View {

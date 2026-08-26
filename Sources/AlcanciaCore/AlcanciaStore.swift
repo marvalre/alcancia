@@ -4,10 +4,6 @@ import CoreGraphics
 
 public struct AlcanciaData: Codable {
     public var monthlyBudgetMXN: Decimal?
-    /// HEREDADO — la meta de ahorro de la versión anterior. Sigue aquí sólo
-    /// para que las vistas viejas compilen mientras se hace el cambio; se va
-    /// en la Tarea 7.
-    public var goalMXN: Decimal?
     public var entries: [Entry]
     public var lastKnownUSDMXNRate: Double?
     public var lastKnownRateDate: Date?
@@ -19,7 +15,6 @@ public struct AlcanciaData: Codable {
 
     public init(
         monthlyBudgetMXN: Decimal? = nil,
-        goalMXN: Decimal? = nil,
         entries: [Entry] = [],
         lastKnownUSDMXNRate: Double? = nil,
         lastKnownRateDate: Date? = nil,
@@ -29,7 +24,6 @@ public struct AlcanciaData: Codable {
         desktopPanelOrigin: [Double]? = nil
     ) {
         self.monthlyBudgetMXN = monthlyBudgetMXN
-        self.goalMXN = goalMXN
         self.entries = entries
         self.lastKnownUSDMXNRate = lastKnownUSDMXNRate
         self.lastKnownRateDate = lastKnownRateDate
@@ -47,7 +41,6 @@ public struct AlcanciaData: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         entries = try container.decodeIfPresent([Entry].self, forKey: .entries) ?? []
         monthlyBudgetMXN = try container.decodeIfPresent(Decimal.self, forKey: .monthlyBudgetMXN)
-        goalMXN = try container.decodeIfPresent(Decimal.self, forKey: .goalMXN)
         lastKnownUSDMXNRate = try container.decodeIfPresent(Double.self, forKey: .lastKnownUSDMXNRate)
         lastKnownRateDate = try container.decodeIfPresent(Date.self, forKey: .lastKnownRateDate)
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
@@ -206,32 +199,6 @@ public final class AlcanciaStore: ObservableObject {
 
     public func formattedAmount(_ amount: Decimal) -> String {
         Self.currencyFormatter.string(from: amount as NSDecimalNumber) ?? "$0"
-    }
-
-    // MARK: - Heredado (se elimina en la Tarea 7)
-    //
-    // Las vistas viejas todavía llaman a esto. `swift test` compila también el
-    // ejecutable, así que quitarlo ahora rompería la suite completa en vez de
-    // sólo la UI. Se va junto con su último llamador.
-
-    public func setGoal(_ amount: Decimal?) {
-        data.goalMXN = amount
-        save()
-    }
-
-    public var totalMXN: Decimal {
-        data.entries.reduce(Decimal(0)) { $0 + $1.amountInMXN }
-    }
-
-    public var formattedTotal: String {
-        formattedAmount(totalMXN)
-    }
-
-    public var menuBarSummary: String {
-        if let goalMXN = data.goalMXN, goalMXN > 0 {
-            return GoalProgress(totalMXN: totalMXN, goalMXN: goalMXN).percentText ?? formattedTotal
-        }
-        return formattedTotal
     }
 
     // MARK: - Persistencia

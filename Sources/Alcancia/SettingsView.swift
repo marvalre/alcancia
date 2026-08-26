@@ -1,3 +1,4 @@
+// Sources/Alcancia/SettingsView.swift
 import SwiftUI
 import AlcanciaCore
 
@@ -5,33 +6,34 @@ struct SettingsView: View {
     @ObservedObject var store: AlcanciaStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var goalText: String = ""
+    @State private var budgetText: String = ""
     @State private var launchAtLogin: Bool = false
-    @State private var showingResetConfirmation = false
+    @State private var showsDesktopPanel: Bool = false
     @State private var loginItemError: String?
+    @State private var showingResetConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Ajustes")
-                .font(.headline)
+            Text("Ajustes").font(.headline)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Meta (MXN)")
-                    .font(.subheadline)
+                Text("Presupuesto mensual (MXN)").font(.subheadline)
                 HStack {
-                    TextField("ej. 10000", text: $goalText)
+                    TextField("ej. 8000", text: $budgetText)
                         .textFieldStyle(.roundedBorder)
-                    Button("Guardar") {
-                        saveGoal()
-                    }
-                    if store.data.goalMXN != nil {
-                        Button("Quitar meta") {
-                            store.setGoal(nil)
-                            goalText = ""
+                        .onSubmit(saveBudget)
+                    Button("Guardar", action: saveBudget)
+                    if store.data.monthlyBudgetMXN != nil {
+                        Button("Quitar") {
+                            store.setMonthlyBudget(nil)
+                            budgetText = ""
                         }
                         .foregroundStyle(.red)
                     }
                 }
+                Text("El cerdito de la barra arranca lleno cada mes y se vacía conforme gastas.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
 
             if let rate = store.data.lastKnownUSDMXNRate {
@@ -40,6 +42,11 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Toggle("Mostrar panel en el escritorio", isOn: $showsDesktopPanel)
+                .onChange(of: showsDesktopPanel) { _, newValue in
+                    store.setShowsDesktopPanel(newValue)
+                }
+
             Toggle("Iniciar con el sistema", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
                     let succeeded = LoginItemManager.setEnabled(newValue)
@@ -47,16 +54,13 @@ struct SettingsView: View {
                         store.setLaunchAtLogin(newValue)
                         loginItemError = nil
                     } else {
-                        launchAtLogin = LoginItemManager.isEnabled
-                        store.setLaunchAtLogin(launchAtLogin)
                         loginItemError = "No se pudo cambiar el inicio automático. Revisa Ajustes del Sistema > Elementos de inicio."
+                        syncLaunchAtLoginFromSystem()
                     }
                 }
 
             if let loginItemError {
-                Text(loginItemError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                Text(loginItemError).font(.caption).foregroundStyle(.red)
             }
 
             Divider()
@@ -79,28 +83,38 @@ struct SettingsView: View {
             Button("Cerrar") { dismiss() }
         }
         .padding(20)
-        .frame(width: 300, height: 380)
+        .frame(width: 320, height: 430)
         .onAppear {
-            if let goal = store.data.goalMXN {
-                goalText = "\(goal)"
+            if let budget = store.data.monthlyBudgetMXN {
+                budgetText = "\(budget)"
             }
-            launchAtLogin = LoginItemManager.isEnabled
-            if launchAtLogin != store.data.launchAtLogin {
-                store.setLaunchAtLogin(launchAtLogin)
-            }
+            showsDesktopPanel = store.data.showsDesktopPanel
+            syncLaunchAtLoginFromSystem()
         }
     }
 
-    private func saveGoal() {
-        guard let value = Decimal(string: goalText.replacingOccurrences(of: ",", with: "")),
+    /// El interruptor refleja el estado real del sistema, no la preferencia
+    /// guardada, para que no pueda mentir si el registro falló.
+    private func syncLaunchAtLoginFromSystem() {
+        let actual = LoginItemManager.isEnabled
+        if launchAtLogin != actual {
+            launchAtLogin = actual
+        }
+        if store.data.launchAtLogin != actual {
+            store.setLaunchAtLogin(actual)
+        }
+    }
+
+    private func saveBudget() {
+        guard let value = Decimal(string: budgetText.replacingOccurrences(of: ",", with: "")),
               value > 0 else { return }
-        store.setGoal(value)
+        store.setMonthlyBudget(value)
     }
 
     private func exchangeRateText(rate: Double, date: Date?) -> String {
-        let rateText = String(format: "Tipo de cambio guardado: %.2f MXN por USD", rate)
-        guard let date else { return rateText }
-        return rateText + " (\(Self.dateFormatter.string(from: date)))"
+        let text = String(format: "Tipo de cambio guardado: %.2f MXN por USD", rate)
+        guard let date else { return text }
+        return text + " (\(Self.dateFormatter.string(from: date)))"
     }
 
     private static let dateFormatter: DateFormatter = {

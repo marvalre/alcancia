@@ -1,3 +1,4 @@
+// Sources/Alcancia/AlcanciaAppMain.swift
 import SwiftUI
 import AlcanciaCore
 
@@ -5,9 +6,10 @@ import AlcanciaCore
 struct AlcanciaAppMain: App {
     @StateObject private var store = AlcanciaStore()
 
-    /// Nivel de llenado del cerdito: `nil` cuando no hay meta, así se queda vacío.
-    private var goalFraction: Double? {
-        GoalProgress(totalMXN: store.totalMXN, goalMXN: store.data.goalMXN).fraction
+    /// El cerdito muestra lo que queda del presupuesto del mes en curso:
+    /// lleno al empezar, vacío cuando se acabó.
+    private var remainingFraction: Double? {
+        store.budgetProgress(for: Date()).fractionRemaining
     }
 
     var body: some Scene {
@@ -15,8 +17,8 @@ struct AlcanciaAppMain: App {
             MenuBarView(store: store)
         } label: {
             Image(nsImage: PiggyBankIcon.image(
-                progress: goalFraction,
-                accessibilityDescription: store.menuBarSummary
+                progress: remainingFraction,
+                accessibilityDescription: store.menuBarAccessibilityLabel(for: Date())
             ))
         }
         .menuBarExtraStyle(.window)

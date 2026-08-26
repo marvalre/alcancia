@@ -2,22 +2,21 @@
 import SwiftUI
 import AlcanciaCore
 
+/// Los movimientos del mes que se está viendo, del más reciente al más viejo.
 struct HistoryView: View {
     @ObservedObject var store: AlcanciaStore
-    @State private var pendingDeleteID: UUID?
+    let summary: MonthlySummary
 
-    private var sortedEntries: [Entry] {
-        store.data.entries.sorted { $0.date > $1.date }
-    }
+    @State private var pendingDeleteID: UUID?
 
     var body: some View {
         Group {
-            if sortedEntries.isEmpty {
+            if summary.entriesInMonth.isEmpty {
                 emptyState
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(sortedEntries) { entry in
+                        ForEach(summary.entriesInMonth) { entry in
                             row(for: entry)
                             Divider()
                         }
@@ -27,7 +26,7 @@ struct HistoryView: View {
         }
         .frame(maxHeight: .infinity)
         .confirmationDialog(
-            "¿Borrar esta entrada?",
+            "¿Borrar este movimiento?",
             isPresented: Binding(
                 get: { pendingDeleteID != nil },
                 set: { isPresented in
@@ -50,7 +49,7 @@ struct HistoryView: View {
     private var emptyState: some View {
         VStack {
             Spacer()
-            Text("Todavía no has agregado nada")
+            Text("Sin movimientos este mes")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -59,20 +58,31 @@ struct HistoryView: View {
     }
 
     private func row(for entry: Entry) -> some View {
-        HStack {
+        HStack(spacing: 8) {
+            Text(entry.kind == .expense ? (entry.category ?? .otro).emoji : "💰")
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.formattedAmount(entry.amountInMXN))
-                    .font(.subheadline)
+                Text(title(for: entry))
+                    .font(.caption)
                 Text(Self.dateFormatter.string(from: entry.date))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+
             Spacer()
-            if entry.currency == .usd {
-                Text("USD \(entry.amount.description)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(signedAmount(for: entry))
+                    .font(.caption.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(entry.kind == .expense ? Color.primary : Color.green)
+                if entry.currency == .usd {
+                    Text("USD \(entry.amount.description)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
+
             Button {
                 pendingDeleteID = entry.id
             } label: {
@@ -82,7 +92,19 @@ struct HistoryView: View {
             .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
+    }
+
+    private func title(for entry: Entry) -> String {
+        if let note = entry.note, !note.isEmpty { return note }
+        return entry.kind == .expense
+            ? (entry.category ?? .otro).label
+            : "Ingreso"
+    }
+
+    private func signedAmount(for entry: Entry) -> String {
+        let sign = entry.kind == .expense ? "−" : "+"
+        return sign + store.formattedAmount(entry.amountInMXN)
     }
 
     private static let dateFormatter: DateFormatter = {
