@@ -28,7 +28,7 @@
 Sources/AlcanciaCore/
   Entry.swift              MODIFY  Entry + Currency + EntryKind, tolerant decoding
   Category.swift           CREATE  category enum with emoji + Spanish label
-  BudgetProgress.swift     CREATE  replaces GoalProgress.swift (DELETED)
+  BudgetProgress.swift     CREATE  added in Task 2; GoalProgress.swift deleted in Task 7
   MonthlySummary.swift     CREATE  per-month totals + category breakdown
   AlcanciaStore.swift      MODIFY  budget, categories, per-month queries
   ExchangeRateService.swift        unchanged
@@ -36,7 +36,7 @@ Sources/Alcancia/
   AlcanciaAppMain.swift    MODIFY  piggy reflects remaining budget
   MenuBarView.swift        MODIFY  recomposed around the month
   MonthHeaderView.swift    CREATE  month navigation + budget bar
-  QuickAddView.swift       CREATE  replaces AddEntryView.swift (DELETED)
+  QuickAddView.swift       CREATE  added in Task 5; AddEntryView.swift deleted in Task 7
   CategoryRowView.swift    CREATE  emoji picker row
   CategoryBreakdownView.swift CREATE  per-category bars
   HistoryView.swift        MODIFY  category, note, sign, colour
@@ -48,7 +48,7 @@ Sources/Alcancia/
 Tests/AlcanciaCoreTests/
   EntryTests.swift         MODIFY  + legacy-format migration test
   CategoryTests.swift      CREATE
-  BudgetProgressTests.swift CREATE replaces GoalProgressTests.swift (DELETED)
+  BudgetProgressTests.swift CREATE added in Task 2; GoalProgressTests.swift deleted in Task 7
   MonthlySummaryTests.swift CREATE
   AlcanciaStoreTests.swift MODIFY  budget, kinds, categories, legacy file
   ExchangeRateServiceTests.swift   unchanged
@@ -161,7 +161,7 @@ final class EntryTests: XCTestCase {
 
 - [ ] **Step 2: Run the tests to see them fail**
 
-Run: `cd alcancia && swift test --filter EntryTests`
+Run: `cd alcancia && swift test --filter EntryTests 2>&1 | tail -20`
 Expected: FAIL — `Entry` has no `kind`, and `Category` does not exist.
 
 - [ ] **Step 3: Create `Category.swift`**
@@ -282,8 +282,10 @@ public struct Entry: Identifiable, Codable, Equatable {
 
 - [ ] **Step 5: Run the tests to confirm they pass**
 
-Run: `cd alcancia && swift build && swift test --filter EntryTests && swift test --filter CategoryTests`
-Expected: PASS — 4 `EntryTests`, 2 `CategoryTests`. The rest of the suite will not compile yet (later tasks fix `AlcanciaStore`); that is expected at this point, so run only these filters.
+Run: `cd alcancia && swift build && swift test 2>&1 | tail -6`
+Expected: build succeeds and the whole suite passes — 4 `EntryTests`, 2 new `CategoryTests`, and everything that already existed. `Entry`'s new fields all have defaults, so existing callers keep compiling untouched.
+
+If the package does not build here, stop and report it rather than pressing on: every task in this plan is required to leave `swift build` and `swift test` green, because `swift test` compiles the executable target too and a broken UI silently blocks the entire suite.
 
 - [ ] **Step 6: Commit**
 
@@ -295,19 +297,17 @@ git commit -m "Add expense categories and entry kinds with tolerant decoding"
 
 ---
 
-### Task 2: BudgetProgress replaces GoalProgress
+### Task 2: BudgetProgress (added alongside GoalProgress)
 
 **Files:**
 - Create: `Sources/AlcanciaCore/BudgetProgress.swift`
-- Delete: `Sources/AlcanciaCore/GoalProgress.swift`
 - Create: `Tests/AlcanciaCoreTests/BudgetProgressTests.swift`
-- Delete: `Tests/AlcanciaCoreTests/GoalProgressTests.swift`
 
 **Interfaces:**
 - Consumes: nothing beyond Foundation.
 - Produces: `public struct BudgetProgress { public init(spentMXN: Decimal, budgetMXN: Decimal?); public var remainingMXN: Decimal?; public var fractionRemaining: Double?; public var isOverBudget: Bool; public var percentSpentText: String? }`. `AlcanciaStore` (Task 4) and `MenuBarView` (Task 8) consume it.
 
-`GoalProgress` and its tests are deleted in this task — nothing references them after Task 4, and Task 4's store rewrite drops the last usage.
+**This task is purely additive.** `GoalProgress.swift` and `GoalProgressTests.swift` stay exactly where they are: `AlcanciaStore.menuBarSummary` and `AlcanciaAppMain` still reference `GoalProgress`, and `swift test` builds the executable target too — deleting it here would stop the whole suite from running, not just this task's tests. Both files are removed in Task 7, in the same commit that drops their last caller.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -439,24 +439,17 @@ public struct BudgetProgress {
 }
 ```
 
-- [ ] **Step 4: Delete the superseded goal files**
+- [ ] **Step 4: Run the whole suite**
+
+Run: `cd alcancia && swift build && swift test 2>&1 | tail -6`
+Expected: build succeeds and every test passes — the 7 new `BudgetProgressTests` plus everything that already existed. The package must stay green; nothing was removed.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 cd alcancia
-rm Sources/AlcanciaCore/GoalProgress.swift Tests/AlcanciaCoreTests/GoalProgressTests.swift
-```
-
-- [ ] **Step 5: Run the tests to confirm they pass**
-
-Run: `cd alcancia && swift test --filter BudgetProgressTests`
-Expected: PASS — 7 tests. Other targets still will not compile until Task 4; use the filter.
-
-- [ ] **Step 6: Commit**
-
-```bash
-cd alcancia
-git add -A Sources/AlcanciaCore Tests/AlcanciaCoreTests
-git commit -m "Replace GoalProgress with BudgetProgress"
+git add Sources/AlcanciaCore/BudgetProgress.swift Tests/AlcanciaCoreTests/BudgetProgressTests.swift
+git commit -m "Add BudgetProgress alongside the existing goal math"
 ```
 
 ---
@@ -661,10 +654,10 @@ private func categoryOrder(_ category: Category) -> Int {
 }
 ```
 
-- [ ] **Step 4: Run the tests to confirm they pass**
+- [ ] **Step 4: Run the whole suite**
 
-Run: `cd alcancia && swift test --filter MonthlySummaryTests`
-Expected: PASS — 6 tests.
+Run: `cd alcancia && swift build && swift test 2>&1 | tail -6`
+Expected: build succeeds and every test passes, including the 6 new `MonthlySummaryTests`. This task is additive; the package stays green.
 
 - [ ] **Step 5: Commit**
 
@@ -694,9 +687,11 @@ git commit -m "Add MonthlySummary with per-category breakdown"
   - `budgetProgress(for month: Date) -> BudgetProgress`
   - `menuBarAccessibilityLabel(for month: Date) -> String`
   - keeps `deleteEntry(id:)`, `resetAllEntries()`, `recordExchangeRate(_:date:)`, `setLaunchAtLogin(_:)`, `formattedAmount(_:)`
-  - drops `totalMXN`, `formattedTotal`, `menuBarSummary`, `setGoal(_:)`
+  - **keeps, temporarily**, `goalMXN`, `setGoal(_:)`, `totalMXN`, `formattedTotal`, `menuBarSummary`. The old views still call these, and `swift test` compiles the executable target — dropping them here would break the build and silently stop the entire suite from running. Task 7 removes them in the same commit that removes their last caller. This is an expand-then-contract migration: expand now, contract once the UI has moved over.
 
 `setDesktopPanelOrigin` takes a `CGPoint?` and stores `[x, y]`; import `CoreGraphics` for `CGPoint`.
+
+`AlcanciaData` keeps `goalMXN` for now so `SettingsView` keeps compiling. It is decoded tolerantly like every other optional field and is removed in Task 7.
 
 - [ ] **Step 1: Write the failing tests — REPLACE the whole test file**
 
@@ -910,6 +905,10 @@ import CoreGraphics
 
 public struct AlcanciaData: Codable {
     public var monthlyBudgetMXN: Decimal?
+    /// HEREDADO — la meta de ahorro de la versión anterior. Sigue aquí sólo
+    /// para que las vistas viejas compilen mientras se hace el cambio; se va
+    /// en la Tarea 7.
+    public var goalMXN: Decimal?
     public var entries: [Entry]
     public var lastKnownUSDMXNRate: Double?
     public var lastKnownRateDate: Date?
@@ -921,6 +920,7 @@ public struct AlcanciaData: Codable {
 
     public init(
         monthlyBudgetMXN: Decimal? = nil,
+        goalMXN: Decimal? = nil,
         entries: [Entry] = [],
         lastKnownUSDMXNRate: Double? = nil,
         lastKnownRateDate: Date? = nil,
@@ -930,6 +930,7 @@ public struct AlcanciaData: Codable {
         desktopPanelOrigin: [Double]? = nil
     ) {
         self.monthlyBudgetMXN = monthlyBudgetMXN
+        self.goalMXN = goalMXN
         self.entries = entries
         self.lastKnownUSDMXNRate = lastKnownUSDMXNRate
         self.lastKnownRateDate = lastKnownRateDate
@@ -947,6 +948,7 @@ public struct AlcanciaData: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         entries = try container.decodeIfPresent([Entry].self, forKey: .entries) ?? []
         monthlyBudgetMXN = try container.decodeIfPresent(Decimal.self, forKey: .monthlyBudgetMXN)
+        goalMXN = try container.decodeIfPresent(Decimal.self, forKey: .goalMXN)
         lastKnownUSDMXNRate = try container.decodeIfPresent(Double.self, forKey: .lastKnownUSDMXNRate)
         lastKnownRateDate = try container.decodeIfPresent(Date.self, forKey: .lastKnownRateDate)
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
@@ -1107,6 +1109,32 @@ public final class AlcanciaStore: ObservableObject {
         Self.currencyFormatter.string(from: amount as NSDecimalNumber) ?? "$0"
     }
 
+    // MARK: - Heredado (se elimina en la Tarea 7)
+    //
+    // Las vistas viejas todavía llaman a esto. `swift test` compila también el
+    // ejecutable, así que quitarlo ahora rompería la suite completa en vez de
+    // sólo la UI. Se va junto con su último llamador.
+
+    public func setGoal(_ amount: Decimal?) {
+        data.goalMXN = amount
+        save()
+    }
+
+    public var totalMXN: Decimal {
+        data.entries.reduce(Decimal(0)) { $0 + $1.amountInMXN }
+    }
+
+    public var formattedTotal: String {
+        formattedAmount(totalMXN)
+    }
+
+    public var menuBarSummary: String {
+        if let goalMXN = data.goalMXN, goalMXN > 0 {
+            return GoalProgress(totalMXN: totalMXN, goalMXN: goalMXN).percentText ?? formattedTotal
+        }
+        return formattedTotal
+    }
+
     // MARK: - Persistencia
 
     private func save() {
@@ -1137,10 +1165,10 @@ public final class AlcanciaStore: ObservableObject {
 }
 ```
 
-- [ ] **Step 4: Run the Core suite**
+- [ ] **Step 4: Build clean and run the whole suite**
 
-Run: `cd alcancia && swift build --target AlcanciaCore && swift test --filter AlcanciaCoreTests`
-Expected: PASS — all Core tests (Entry 4, Category 2, BudgetProgress 7, MonthlySummary 6, AlcanciaStore 16, ExchangeRateService 3 = 38). The `Alcancia` executable target still will not compile until Task 8; that is expected.
+Run: `cd alcancia && swift build 2>&1 | tail -20 && swift test 2>&1 | tail -6`
+Expected: the package builds — the legacy members kept above are what let the old views keep compiling — and all 38 tests pass (Entry 4, Category 2, BudgetProgress 7, MonthlySummary 6, AlcanciaStore 16, ExchangeRateService 3).
 
 - [ ] **Step 5: Commit**
 
@@ -1152,19 +1180,20 @@ git commit -m "Rework AlcanciaStore around monthly budgets and categories"
 
 ---
 
-### Task 5: QuickAddView — the sub-3-second capture
+### Task 5: The capture row — QuickAddView, CategoryRowView, MonthHeaderView
 
 **Files:**
 - Create: `Sources/Alcancia/QuickAddView.swift`
-- Delete: `Sources/Alcancia/AddEntryView.swift`
+- Create: `Sources/Alcancia/CategoryRowView.swift`
+- Create: `Sources/Alcancia/MonthHeaderView.swift`
 
 **Interfaces:**
-- Consumes: `AlcanciaStore` (Task 4) — `data.lastUsedCategory`, `data.lastKnownUSDMXNRate`, `data.lastKnownRateDate`, `addEntry(amount:currency:kind:category:note:exchangeRate:date:)`, `recordExchangeRate(_:date:)`; `ExchangeRateService`; `Category`, `EntryKind`, `Currency`.
-- Produces: `struct QuickAddView: View { init(store: AlcanciaStore) }` — consumed by `MenuBarView` (Task 8).
+- Consumes: `AlcanciaStore` (Task 4), `ExchangeRateService`, `Category`, `EntryKind`, `Currency`, `BudgetProgress`, `MonthlySummary`.
+- Produces: `struct QuickAddView: View { init(store: AlcanciaStore) }`, `struct CategoryRowView: View { init(selection: Binding<Category>) }`, `struct MonthHeaderView: View { init(store: AlcanciaStore, month: Binding<Date>) }` — all consumed by `MenuBarView` in Task 7.
 
-This is the view the whole app lives or dies on. The amount field must be focused the moment the popover opens, and Enter must commit — typing an amount and pressing Return is the entire interaction.
+All three ship together because `QuickAddView` embeds `CategoryRowView`; splitting them would leave the package uncompilable between commits. **`AddEntryView.swift` is not deleted here** — `MenuBarView` still calls it, and it still compiles against the legacy store members Task 4 kept. Task 7 deletes it in the same commit that stops calling it.
 
-The executable target will not compile until Task 8 rewires `MenuBarView`; verify this task by reading the diff and by the build at Task 8. Do not delete `AddEntryView.swift` until the end of this task's edits.
+`QuickAddView` is the view the whole app lives or dies on: the amount field must be focused the moment the popover opens, and Return must commit. Typing an amount and pressing Return is the entire interaction.
 
 - [ ] **Step 1: Create `QuickAddView.swift`**
 
@@ -1360,36 +1389,7 @@ struct QuickAddView: View {
 }
 ```
 
-- [ ] **Step 2: Delete the superseded view**
-
-```bash
-cd alcancia
-rm Sources/Alcancia/AddEntryView.swift
-```
-
-- [ ] **Step 3: Commit**
-
-```bash
-cd alcancia
-git add -A Sources/Alcancia
-git commit -m "Add QuickAddView with auto-focused amount and Enter to commit"
-```
-
----
-
-### Task 6: CategoryRowView and MonthHeaderView
-
-**Files:**
-- Create: `Sources/Alcancia/CategoryRowView.swift`
-- Create: `Sources/Alcancia/MonthHeaderView.swift`
-
-**Interfaces:**
-- Consumes: `Category` (Task 1), `AlcanciaStore` + `BudgetProgress` + `MonthlySummary` (Tasks 2-4).
-- Produces:
-  - `struct CategoryRowView: View { init(selection: Binding<Category>) }` — used by `QuickAddView` (Task 5).
-  - `struct MonthHeaderView: View { init(store: AlcanciaStore, month: Binding<Date>) }` — used by `MenuBarView` (Task 8).
-
-- [ ] **Step 1: Create `CategoryRowView.swift`**
+- [ ] **Step 2: Create `CategoryRowView.swift`**
 
 ```swift
 // Sources/Alcancia/CategoryRowView.swift
@@ -1432,7 +1432,7 @@ struct CategoryRowView: View {
 }
 ```
 
-- [ ] **Step 2: Create `MonthHeaderView.swift`**
+- [ ] **Step 3: Create `MonthHeaderView.swift`**
 
 ```swift
 // Sources/Alcancia/MonthHeaderView.swift
@@ -1530,27 +1530,31 @@ struct MonthHeaderView: View {
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Build and run the suite**
+
+Run: `cd alcancia && swift build 2>&1 | tail -20 && swift test 2>&1 | tail -6`
+Expected: the package builds with **zero warnings** and every test passes. Every task in this plan must leave the package green — `swift test` compiles the executable target too, so a broken view silently blocks the whole suite.
+
+The three new views are not referenced by anything yet; this step only proves they compile.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 cd alcancia
-git add Sources/Alcancia/CategoryRowView.swift Sources/Alcancia/MonthHeaderView.swift
-git commit -m "Add category picker row and month header with budget bar"
+git add Sources/Alcancia/QuickAddView.swift Sources/Alcancia/CategoryRowView.swift Sources/Alcancia/MonthHeaderView.swift
+git commit -m "Add quick-capture row, category picker and month header"
 ```
 
 ---
 
-### Task 7: CategoryBreakdownView and the reworked HistoryView
+### Task 6: CategoryBreakdownView
 
 **Files:**
 - Create: `Sources/Alcancia/CategoryBreakdownView.swift`
-- Modify: `Sources/Alcancia/HistoryView.swift`
 
 **Interfaces:**
-- Consumes: `MonthlySummary`, `CategoryTotal`, `Entry`, `EntryKind`, `Category`, `AlcanciaStore`.
-- Produces:
-  - `struct CategoryBreakdownView: View { init(store: AlcanciaStore, summary: MonthlySummary) }`
-  - `struct HistoryView: View { init(store: AlcanciaStore, summary: MonthlySummary) }` — note the changed initializer; `MenuBarView` (Task 8) passes the month's summary rather than reading all entries.
+- Consumes: `MonthlySummary`, `CategoryTotal`, `AlcanciaStore`.
+- Produces: `struct CategoryBreakdownView: View { init(store: AlcanciaStore, summary: MonthlySummary) }` — consumed by `MenuBarView` in Task 7.
 
 - [ ] **Step 1: Create `CategoryBreakdownView.swift`**
 
@@ -1613,7 +1617,42 @@ struct CategoryBreakdownView: View {
 }
 ```
 
-- [ ] **Step 2: Rewrite `HistoryView.swift`**
+- [ ] **Step 2: Build and run the suite**
+
+Run: `cd alcancia && swift build 2>&1 | tail -20 && swift test 2>&1 | tail -6`
+Expected: the package builds with **zero warnings** and every test passes. Every task in this plan must leave the package green — `swift test` compiles the executable target too, so a broken view silently blocks the whole suite.
+
+- [ ] **Step 3: Commit**
+
+```bash
+cd alcancia
+git add Sources/Alcancia/CategoryBreakdownView.swift
+git commit -m "Add per-category spending breakdown"
+```
+
+---
+
+### Task 7: The swap — wire the new views in and remove the old ones
+
+**Files:**
+- Modify: `Sources/Alcancia/MenuBarView.swift`
+- Modify: `Sources/Alcancia/HistoryView.swift`
+- Modify: `Sources/Alcancia/SettingsView.swift`
+- Modify: `Sources/Alcancia/AlcanciaAppMain.swift`
+- Modify: `Sources/AlcanciaCore/AlcanciaStore.swift` (drop the legacy block)
+- Delete: `Sources/Alcancia/AddEntryView.swift`
+- Delete: `Sources/AlcanciaCore/GoalProgress.swift`
+- Delete: `Tests/AlcanciaCoreTests/GoalProgressTests.swift`
+
+**Interfaces:**
+- Consumes: everything from Tasks 1-6.
+- Produces: `HistoryView(store:summary:)` — note the changed initializer, it now takes the visible month's summary instead of reading every entry. `MenuBarView(store:)` and `SettingsView(store:)` keep theirs.
+
+This task is atomic on purpose. It is the contract half of the expand-then-contract migration: the new views go in and, in the same commit, the last callers of the legacy store members disappear along with the members themselves. Splitting it would leave a commit where the package does not build.
+
+Do the edits in the order below and only build at the end — intermediate states will not compile, and that is expected **within** this task.
+
+- [ ] **Step 1: Rewrite `HistoryView.swift`**
 
 ```swift
 // Sources/Alcancia/HistoryView.swift
@@ -1735,30 +1774,7 @@ struct HistoryView: View {
 }
 ```
 
-- [ ] **Step 3: Commit**
-
-```bash
-cd alcancia
-git add Sources/Alcancia/CategoryBreakdownView.swift Sources/Alcancia/HistoryView.swift
-git commit -m "Add category breakdown and rework history around the visible month"
-```
-
----
-
-### Task 8: Rewire MenuBarView, SettingsView and the app entry point
-
-**Files:**
-- Modify: `Sources/Alcancia/MenuBarView.swift`
-- Modify: `Sources/Alcancia/SettingsView.swift`
-- Modify: `Sources/Alcancia/AlcanciaAppMain.swift`
-
-**Interfaces:**
-- Consumes: everything from Tasks 1-7.
-- Produces: a compiling, runnable app. `MenuBarView(store:)` and `SettingsView(store:)` keep their initializers.
-
-This is the first task where the whole thing compiles again. Expect to fix small mismatches; that is the point of doing it here.
-
-- [ ] **Step 1: Rewrite `MenuBarView.swift`**
+- [ ] **Step 2: Rewrite `MenuBarView.swift`**
 
 ```swift
 // Sources/Alcancia/MenuBarView.swift
@@ -1836,7 +1852,7 @@ struct MenuBarView: View {
 }
 ```
 
-- [ ] **Step 2: Rewrite `SettingsView.swift`**
+- [ ] **Step 3: Rewrite `SettingsView.swift`**
 
 ```swift
 // Sources/Alcancia/SettingsView.swift
@@ -1967,9 +1983,9 @@ struct SettingsView: View {
 }
 ```
 
-Note the `syncLaunchAtLoginFromSystem` helper: the previous version reassigned `launchAtLogin` inside its own `.onChange`, which re-entered the handler and wiped the error message before it could be seen. Assigning only when the value actually differs stops the re-entrant round trip from clearing `loginItemError`.
+Note `syncLaunchAtLoginFromSystem`: the previous version reassigned `launchAtLogin` inside its own `.onChange`, which re-entered the handler and wiped the error message before it could be read. Assigning only when the value actually differs stops that re-entrant round trip from clearing `loginItemError`.
 
-- [ ] **Step 3: Rewrite `AlcanciaAppMain.swift`**
+- [ ] **Step 4: Rewrite `AlcanciaAppMain.swift`**
 
 ```swift
 // Sources/Alcancia/AlcanciaAppMain.swift
@@ -2000,12 +2016,27 @@ struct AlcanciaAppMain: App {
 }
 ```
 
-- [ ] **Step 4: Build clean and run the whole suite**
+- [ ] **Step 5: Delete the superseded files**
 
-Run: `cd alcancia && rm -rf .build && swift build 2>&1 | tail -30 && swift test 2>&1 | tail -10`
-Expected: build succeeds with **zero warnings**; all 38 Core tests pass. Fix any compile mismatch here rather than deferring it.
+```bash
+cd alcancia
+rm Sources/Alcancia/AddEntryView.swift
+rm Sources/AlcanciaCore/GoalProgress.swift
+rm Tests/AlcanciaCoreTests/GoalProgressTests.swift
+```
 
-- [ ] **Step 5: Headless smoke test**
+- [ ] **Step 6: Drop the legacy block from `AlcanciaStore.swift`**
+
+Delete the whole `// MARK: - Heredado (se elimina en la Tarea 7)` section — `setGoal(_:)`, `totalMXN`, `formattedTotal` and `menuBarSummary` — and delete the `goalMXN` property from `AlcanciaData`, its parameter and assignment in `init`, and its `decodeIfPresent` line in `init(from:)`.
+
+Dropping `goalMXN` from the struct is safe for existing files: `JSONDecoder` ignores keys it does not know, so a `data.json` that still carries a saved goal keeps loading. The only thing lost is that goal value, which no longer has a place in an expense-control app.
+
+- [ ] **Step 7: Build clean and run the whole suite**
+
+Run: `cd alcancia && rm -rf .build && swift build 2>&1 | tail -30 && swift test 2>&1 | tail -6`
+Expected: build succeeds with **zero warnings**; all 38 tests pass. Fix any compile mismatch here rather than deferring it — this is the first moment the new app exists end to end.
+
+- [ ] **Step 8: Headless smoke test**
 
 ```bash
 cd alcancia
@@ -2021,19 +2052,19 @@ fi
 cat /tmp/alcancia-smoke.log
 ```
 
-Expected: still alive, no exception or crash trace in the log. A `MenuBarExtra` app prints nothing on a healthy launch.
+Expected: still alive, no exception or crash trace. A `MenuBarExtra` app prints nothing on a healthy launch.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cd alcancia
-git add Sources/Alcancia/MenuBarView.swift Sources/Alcancia/SettingsView.swift Sources/Alcancia/AlcanciaAppMain.swift
-git commit -m "Rewire the app around monthly budgets, categories and quick capture"
+git add -A Sources Tests
+git commit -m "Swap the UI over to monthly budgets and drop the savings-goal code"
 ```
 
 ---
 
-### Task 9: Floating desktop panel
+### Task 8: Floating desktop panel
 
 **Files:**
 - Create: `Sources/Alcancia/DesktopPanelView.swift`
@@ -2041,10 +2072,10 @@ git commit -m "Rewire the app around monthly budgets, categories and quick captu
 - Modify: `Sources/Alcancia/AlcanciaAppMain.swift`
 
 **Interfaces:**
-- Consumes: `AlcanciaStore`, `BudgetProgress`, `PiggyBankIcon`.
+- Consumes: `AlcanciaStore`, `BudgetProgress`, `MonthlySummary`, `PiggyBankIcon`.
 - Produces: `struct DesktopPanelView: View { init(store: AlcanciaStore) }` and `@MainActor final class DesktopPanelController: ObservableObject { init(store: AlcanciaStore); func update(shows: Bool) }`.
 
-This is the answer to "can it also just be a widget". A real WidgetKit widget needs an App Group, which needs an Apple Developer account this machine does not have; a borderless always-on-top panel gives the same always-visible glance with no signing requirements.
+This is the answer to "can it also just be a widget". A real WidgetKit widget needs an App Group, which needs an Apple Developer account this machine does not have — `security find-identity -v -p codesigning` reports zero valid identities. A borderless always-on-top panel gives the same always-visible glance with no signing requirement.
 
 - [ ] **Step 1: Create `DesktopPanelView.swift`**
 
@@ -2189,9 +2220,7 @@ final class DesktopPanelController: ObservableObject {
 }
 ```
 
-- [ ] **Step 3: Wire the panel into `AlcanciaAppMain.swift`**
-
-Replace the whole file:
+- [ ] **Step 3: Rewire `AlcanciaAppMain.swift`**
 
 ```swift
 // Sources/Alcancia/AlcanciaAppMain.swift
@@ -2233,12 +2262,12 @@ struct AlcanciaAppMain: App {
 }
 ```
 
-- [ ] **Step 4: Build clean and smoke test**
+- [ ] **Step 4: Build clean, run the suite, smoke test**
 
-Run: `cd alcancia && rm -rf .build && swift build 2>&1 | tail -30`
-Expected: zero warnings.
+Run: `cd alcancia && rm -rf .build && swift build 2>&1 | tail -30 && swift test 2>&1 | tail -6`
+Expected: zero warnings, all 38 tests pass.
 
-Then the same headless run as Task 8 Step 5, confirming the app stays alive.
+Then repeat Task 7's Step 8 headless smoke test and confirm the app stays alive.
 
 - [ ] **Step 5: Commit**
 
@@ -2250,7 +2279,7 @@ git commit -m "Add floating desktop panel as the widget stand-in"
 
 ---
 
-### Task 10: README and packaging
+### Task 9: README and packaging
 
 **Files:**
 - Modify: `README.md`
@@ -2351,7 +2380,7 @@ swift test
 - [ ] **Step 2: Package and verify**
 
 Run: `cd alcancia && ./build_app.sh && plutil -p "Alcancía.app/Contents/Info.plist" | grep -E "LSUIElement|CFBundleIdentifier" && codesign -dv "Alcancía.app" 2>&1 | grep -i signature`
-Expected: build finishes with `Listo: ./Alcancía.app`, `LSUIElement => 1`, `CFBundleIdentifier => "com.mvisuals.alcancia"`, `Signature=adhoc`.
+Expected: finishes with `Listo: ./Alcancía.app`, `LSUIElement => 1`, `CFBundleIdentifier => "com.mvisuals.alcancia"`, `Signature=adhoc`.
 
 - [ ] **Step 3: Commit**
 
@@ -2365,6 +2394,8 @@ git commit -m "Update README for the expense-control app"
 
 ## Post-plan note
 
-`Alcancía.app` and `.build/` stay git-ignored. After Task 10 the working app is at `alcancia/Alcancía.app`.
+`Alcancía.app` and `.build/` stay git-ignored. After Task 9 the working app is at `alcancia/Alcancía.app`.
+
+**Every task must leave `swift build` and `swift test` green.** `swift test` compiles the executable target as well as the library, so a view that does not compile stops the entire suite from running — not just that view's own checks. Tasks 1-6 are additive for exactly this reason, and Task 7 is deliberately atomic.
 
 The single riskiest thing in this plan is the migration of existing `data.json` files (Tasks 1 and 4). `testLoadsFileWrittenByThePreviousVersion` is the test that stands between a working upgrade and a user who believes the app deleted their money — treat any failure there as a stop-the-line event, never as a test to adjust.
