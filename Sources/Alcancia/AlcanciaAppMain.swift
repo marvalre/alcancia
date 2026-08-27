@@ -3,10 +3,23 @@ import AppKit
 import SwiftUI
 import AlcanciaCore
 
-/// Libera el atajo global al salir, como pide el diseño ("se libera al
-/// salir"). Carbon lo limpiaría solo al morir el proceso, pero hacerlo
-/// explícito evita depender de eso.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Lo puebla `AlcanciaAppMain.init()`. El panel de escritorio se restaura
+    /// aquí y no en el `.onAppear` del contenido del `MenuBarExtra`, porque ese
+    /// contenido se crea perezosamente hasta el primer clic en el ícono: un
+    /// widget que sólo aparece después de invocarlo con el mouse no es un
+    /// widget. Al arrancar la Mac tiene que estar ahí solo.
+    static var restoreDesktopPanel: (@MainActor () -> Void)?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Task { @MainActor in
+            Self.restoreDesktopPanel?()
+        }
+    }
+
+    /// Libera el atajo global al salir, como pide el diseño ("se libera al
+    /// salir"). Carbon lo limpiaría solo al morir el proceso, pero hacerlo
+    /// explícito evita depender de eso.
     func applicationWillTerminate(_ notification: Notification) {
         HotKeyManager.shared.unregister()
     }
@@ -22,9 +35,21 @@ struct AlcanciaAppMain: App {
     init() {
         let store = AlcanciaStore()
         _store = StateObject(wrappedValue: store)
-        _desktopPanel = StateObject(wrappedValue: DesktopPanelController(store: store))
+        let desktopPanel = DesktopPanelController(store: store)
+        _desktopPanel = StateObject(wrappedValue: desktopPanel)
         let quickCapture = QuickCaptureController(store: store)
         _quickCapture = StateObject(wrappedValue: quickCapture)
+
+        // Un clic en el panel del escritorio abre la captura rápida: así el
+        // widget deja de ser decorativo y se vuelve el botón permanente de
+        // "anotar un gasto".
+        desktopPanel.onActivate = { quickCapture.toggle() }
+
+        // El panel se levanta cuando la app termina de arrancar, no cuando el
+        // usuario abre el menú.
+        AppDelegate.restoreDesktopPanel = {
+            desktopPanel.update(shows: store.data.showsDesktopPanel)
+        }
 
         // Registrado aquí, no en `.onAppear` del contenido del `MenuBarExtra`:
         // con `.menuBarExtraStyle(.window)` ese contenido se crea perezosamente
@@ -46,9 +71,6 @@ struct AlcanciaAppMain: App {
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(store: store)
-                .onAppear {
-                    desktopPanel.update(shows: store.data.showsDesktopPanel)
-                }
                 .onChange(of: store.data.showsDesktopPanel) { _, shows in
                     desktopPanel.update(shows: shows)
                 }
