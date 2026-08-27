@@ -23,19 +23,28 @@ public enum MoneyParser {
 
         let comma = value.lastIndex(of: ",")
         let dot = value.lastIndex(of: ".")
-        let decimalSeparator: Character?
+        // La posición del separador decimal, no el carácter: si el mismo
+        // separador aparece más de una vez (p. ej. "1.234.56" al estilo
+        // europeo, o "12,345,67"), sólo la ÚLTIMA ocurrencia es el punto
+        // decimal. Las demás son separadores de miles y se descartan igual
+        // que las del otro carácter. Antes se comparaba por VALOR del
+        // carácter, así que todas las ocurrencias del separador elegido se
+        // volvían punto — "1.234.56" truncaba en silencio a 1.234.
+        let decimalIndex: String.Index?
         switch (comma, dot) {
-        case let (.some(c), .some(d)): decimalSeparator = c > d ? "," : "."
+        case let (.some(c), .some(d)): decimalIndex = c > d ? c : d
         case let (.some(c), .none):
-            decimalSeparator = value.distance(from: value.index(after: c), to: value.endIndex) <= 2 ? "," : nil
+            decimalIndex = value.distance(from: value.index(after: c), to: value.endIndex) <= 2 ? c : nil
         case let (.none, .some(d)):
-            decimalSeparator = value.distance(from: value.index(after: d), to: value.endIndex) <= 2 ? "." : nil
-        case (.none, .none): decimalSeparator = nil
+            decimalIndex = value.distance(from: value.index(after: d), to: value.endIndex) <= 2 ? d : nil
+        case (.none, .none): decimalIndex = nil
         }
 
         var normalized = ""
-        for character in value where character.isNumber || character == "," || character == "." || character == "-" {
-            if character == decimalSeparator { normalized.append(".") }
+        for index in value.indices
+        where value[index].isNumber || value[index] == "," || value[index] == "." || value[index] == "-" {
+            let character = value[index]
+            if index == decimalIndex { normalized.append(".") }
             else if character != "," && character != "." { normalized.append(character) }
         }
         return Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX"))

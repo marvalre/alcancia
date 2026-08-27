@@ -264,6 +264,11 @@ public final class AlcanciaStore: ObservableObject {
 
     public func updateEntry(_ entry: Entry) -> Result<Void, StoreError> {
         guard entry.amount > 0, entry.amountInMXN > 0 else { return .failure(.invalidAmount) }
+        // Antes, si el id ya no existía (p. ej. se borró en otra parte antes
+        // de que un "deshacer" pendiente se disparara), el closure de abajo
+        // no hacía nada pero `mutate` igual guardaba y reportaba éxito —
+        // el llamador creía que se guardó un cambio que nunca ocurrió.
+        guard data.entries.contains(where: { $0.id == entry.id }) else { return .failure(.entryNotFound) }
         return mutate { candidate in
             guard let index = candidate.entries.firstIndex(where: { $0.id == entry.id }) else { return }
             candidate.entries[index] = entry
@@ -272,6 +277,7 @@ public final class AlcanciaStore: ObservableObject {
 
     public func restoreEntry(_ entry: Entry) -> Result<Void, StoreError> {
         guard entry.amount > 0, entry.amountInMXN > 0 else { return .failure(.invalidAmount) }
+        guard !data.entries.contains(where: { $0.id == entry.id }) else { return .failure(.entryAlreadyExists) }
         return mutate { candidate in
             guard !candidate.entries.contains(where: { $0.id == entry.id }) else { return }
             candidate.entries.append(entry)

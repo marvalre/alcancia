@@ -578,6 +578,31 @@ final class AlcanciaStoreTests: XCTestCase {
         XCTAssertEqual(store.summary(for: Date()).totalSpentMXN, 250)
     }
 
+    /// Antes, editar un movimiento que ya no existe (p. ej. se borró en otra
+    /// parte antes de que un "deshacer" pendiente se disparara) reportaba
+    /// éxito sin escribir nada — el llamador creía que se guardó un cambio
+    /// que nunca ocurrió.
+    func testUpdatingANonExistentEntryReportsNotFoundInsteadOfFalseSuccess() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        let entry = store.addEntry(amount: 250, currency: .mxn, category: .comida)
+        store.deleteEntry(id: entry.id)
+
+        guard case .failure(.entryNotFound) = store.updateEntry(entry) else {
+            return XCTFail("Editar un movimiento borrado no debió reportar éxito")
+        }
+        XCTAssertTrue(store.data.entries.isEmpty)
+    }
+
+    func testRestoringAnEntryThatAlreadyExistsReportsAlreadyExists() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        let entry = store.addEntry(amount: 250, currency: .mxn, category: .comida)
+
+        guard case .failure(.entryAlreadyExists) = store.restoreEntry(entry) else {
+            return XCTFail("Restaurar un movimiento que ya existe no debió reportar éxito silencioso")
+        }
+        XCTAssertEqual(store.data.entries.count, 1)
+    }
+
     func testLoggingRecurringExpensesUsesOneObservableResult() {
         let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
         store.addRecurringExpense(name: "Adobe", amountMXN: 399, category: .software)
