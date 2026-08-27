@@ -12,6 +12,8 @@ public struct AlcanciaData: Codable {
     public var showsDesktopPanel: Bool
     /// [x, y] de la esquina del panel flotante, para restaurarlo donde quedó.
     public var desktopPanelOrigin: [Double]?
+    public var recurringExpenses: [RecurringExpense]
+    public var lastUsedIsBusiness: Bool
 
     public init(
         monthlyBudgetMXN: Decimal? = nil,
@@ -21,7 +23,9 @@ public struct AlcanciaData: Codable {
         launchAtLogin: Bool = false,
         lastUsedCategory: ExpenseCategory? = nil,
         showsDesktopPanel: Bool = false,
-        desktopPanelOrigin: [Double]? = nil
+        desktopPanelOrigin: [Double]? = nil,
+        recurringExpenses: [RecurringExpense] = [],
+        lastUsedIsBusiness: Bool = false
     ) {
         self.monthlyBudgetMXN = monthlyBudgetMXN
         self.entries = entries
@@ -31,6 +35,8 @@ public struct AlcanciaData: Codable {
         self.lastUsedCategory = lastUsedCategory
         self.showsDesktopPanel = showsDesktopPanel
         self.desktopPanelOrigin = desktopPanelOrigin
+        self.recurringExpenses = recurringExpenses
+        self.lastUsedIsBusiness = lastUsedIsBusiness
     }
 
     /// Todo campo agregado después de la primera versión se decodifica con
@@ -47,6 +53,8 @@ public struct AlcanciaData: Codable {
         lastUsedCategory = try container.decodeIfPresent(ExpenseCategory.self, forKey: .lastUsedCategory)
         showsDesktopPanel = try container.decodeIfPresent(Bool.self, forKey: .showsDesktopPanel) ?? false
         desktopPanelOrigin = try container.decodeIfPresent([Double].self, forKey: .desktopPanelOrigin)
+        recurringExpenses = try container.decodeIfPresent([RecurringExpense].self, forKey: .recurringExpenses) ?? []
+        lastUsedIsBusiness = try container.decodeIfPresent(Bool.self, forKey: .lastUsedIsBusiness) ?? false
     }
 }
 
@@ -99,6 +107,10 @@ public final class AlcanciaStore: ObservableObject {
         )
     }
 
+    public func spendingTrend(months: Int = 6, endingAt month: Date) -> SpendingTrend {
+        SpendingTrend(entries: data.entries, endingAt: month, months: months, calendar: calendar)
+    }
+
     /// Lo que lee VoiceOver del ícono de la barra de menú.
     public func menuBarAccessibilityLabel(for month: Date) -> String {
         let spent = formattedAmount(summary(for: month).totalSpentMXN)
@@ -118,7 +130,8 @@ public final class AlcanciaStore: ObservableObject {
         category: ExpenseCategory? = nil,
         note: String? = nil,
         exchangeRate: Double? = nil,
-        date: Date = Date()
+        date: Date = Date(),
+        isBusiness: Bool = false
     ) -> Entry {
         let amountInMXN: Decimal
         let rateUsed: Double?
@@ -141,12 +154,17 @@ public final class AlcanciaStore: ObservableObject {
             date: date,
             kind: kind,
             category: kind == .expense ? (category ?? .otro) : nil,
-            note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote
+            note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote,
+            isBusiness: kind == .expense ? isBusiness : false
         )
         data.entries.append(entry)
-        // Sólo los gastos mueven la categoría por defecto de la captura rápida.
+        // Sólo los gastos mueven la categoría y el interruptor de negocio por
+        // defecto de la captura rápida.
         if kind == .expense, let category {
             data.lastUsedCategory = category
+        }
+        if kind == .expense {
+            data.lastUsedIsBusiness = isBusiness
         }
         save()
         return entry
@@ -162,6 +180,64 @@ public final class AlcanciaStore: ObservableObject {
         save()
     }
 
+    // MARK: - Gastos recurrentes
+
+    @discardableResult
+    public func addRecurringExpense(
+        name: String,
+        amountMXN: Decimal,
+        category: ExpenseCategory,
+        isBusiness: Bool = false
+    ) -> RecurringExpense {
+        let recurring = RecurringExpense(
+            name: name,
+            amountMXN: amountMXN,
+            category: category,
+            isBusiness: isBusiness
+        )
+        data.recurringExpenses.append(recurring)
+        save()
+        return recurring
+    }
+
+    public func updateRecurringExpense(_ recurring: RecurringExpense) {
+        guard let index = data.recurringExpenses.firstIndex(where: { $0.id == recurring.id }) else { return }
+        data.recurringExpenses[index] = recurring
+        save()
+    }
+
+    public func deleteRecurringExpense(id: UUID) {
+        data.recurringExpenses.removeAll { $0.id == id }
+        save()
+    }
+
+    /// Recurrentes que todavía no tienen un movimiento en `month`. "Registrado"
+    /// significa que existe un movimiento cuyo `note` coincide exactamente con
+    /// el `name` de la recurrente — evita duplicados sin necesidad de otro
+    /// campo de enlace.
+    public func unloggedRecurring(for month: Date) -> [RecurringExpense] {
+        let loggedNotes = Set(summary(for: month).entriesInMonth.compactMap(\.note))
+        return data.recurringExpenses.filter { !loggedNotes.contains($0.name) }
+    }
+
+    /// Crea un movimiento de gasto por cada recurrente sin registrar de
+    /// `month`, fechado hoy (no en la fecha del mes que se está viendo).
+    /// Correrlo dos veces no duplica nada: la segunda vez ya no hay
+    /// recurrentes sin registrar.
+    public func logRecurring(for month: Date) {
+        for recurring in unloggedRecurring(for: month) {
+            addEntry(
+                amount: recurring.amountMXN,
+                currency: .mxn,
+                kind: .expense,
+                category: recurring.category,
+                note: recurring.name,
+                date: Date(),
+                isBusiness: recurring.isBusiness
+            )
+        }
+    }
+
     // MARK: - Ajustes
 
     public func setMonthlyBudget(_ amount: Decimal?) {
@@ -171,6 +247,11 @@ public final class AlcanciaStore: ObservableObject {
 
     public func setLastUsedCategory(_ category: ExpenseCategory) {
         data.lastUsedCategory = category
+        save()
+    }
+
+    public func setLastUsedIsBusiness(_ isBusiness: Bool) {
+        data.lastUsedIsBusiness = isBusiness
         save()
     }
 

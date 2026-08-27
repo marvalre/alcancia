@@ -15,9 +15,14 @@ final class MonthlySummaryTests: XCTestCase {
         ))!
     }
 
-    private func expense(_ amount: Decimal, _ category: AlcanciaCore.ExpenseCategory, on date: Date) -> Entry {
+    private func expense(
+        _ amount: Decimal,
+        _ category: AlcanciaCore.ExpenseCategory,
+        on date: Date,
+        isBusiness: Bool = false
+    ) -> Entry {
         Entry(amount: amount, currency: .mxn, amountInMXN: amount,
-              date: date, kind: .expense, category: category)
+              date: date, kind: .expense, category: category, isBusiness: isBusiness)
     }
 
     private func income(_ amount: Decimal, on date: Date) -> Entry {
@@ -77,6 +82,23 @@ final class MonthlySummaryTests: XCTestCase {
         let summary = MonthlySummary(entries: [entry], month: date(2026, 8, 15), calendar: calendar)
         XCTAssertEqual(summary.byCategory.map(\.category), [.otro])
         XCTAssertEqual(summary.totalSpentMXN, 250)
+    }
+
+    func testTotalBusinessExcludesPersonalExpensesAndIncome() {
+        let entries = [
+            expense(300, .software, on: date(2026, 8, 5), isBusiness: true),
+            expense(100, .comida, on: date(2026, 8, 6), isBusiness: false),
+            income(5000, on: date(2026, 8, 7))
+        ]
+        let summary = MonthlySummary(entries: entries, month: date(2026, 8, 15), calendar: calendar)
+        XCTAssertEqual(summary.totalBusinessMXN, 300)
+        XCTAssertEqual(summary.totalSpentMXN, 400)
+    }
+
+    func testTotalBusinessIsZeroWhenNothingIsMarkedBusiness() {
+        let entries = [expense(200, .comida, on: date(2026, 8, 5))]
+        let summary = MonthlySummary(entries: entries, month: date(2026, 8, 15), calendar: calendar)
+        XCTAssertEqual(summary.totalBusinessMXN, 0)
     }
 
     func testEntriesInMonthAreNewestFirst() {

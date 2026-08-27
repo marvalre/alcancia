@@ -20,6 +20,7 @@ public struct Entry: Identifiable, Codable, Equatable {
     public var kind: EntryKind
     public var category: ExpenseCategory?
     public var note: String?
+    public var isBusiness: Bool
 
     public init(
         id: UUID = UUID(),
@@ -30,7 +31,8 @@ public struct Entry: Identifiable, Codable, Equatable {
         date: Date = Date(),
         kind: EntryKind = .expense,
         category: ExpenseCategory? = nil,
-        note: String? = nil
+        note: String? = nil,
+        isBusiness: Bool = false
     ) {
         self.id = id
         self.amount = amount
@@ -41,6 +43,7 @@ public struct Entry: Identifiable, Codable, Equatable {
         self.kind = kind
         self.category = category
         self.note = note
+        self.isBusiness = isBusiness
     }
 
     public init(from decoder: Decoder) throws {
@@ -57,5 +60,6 @@ public struct Entry: Identifiable, Codable, Equatable {
         kind = try container.decodeIfPresent(EntryKind.self, forKey: .kind) ?? .income
         category = try container.decodeIfPresent(ExpenseCategory.self, forKey: .category)
         note = try container.decodeIfPresent(String.self, forKey: .note)
+        isBusiness = try container.decodeIfPresent(Bool.self, forKey: .isBusiness) ?? false
     }
 }

@@ -22,6 +22,8 @@ public struct MonthlySummary {
     public let entriesInMonth: [Entry]
     public let totalSpentMXN: Decimal
     public let totalIncomeMXN: Decimal
+    /// Parte de `totalSpentMXN` marcada como gasto de negocio.
+    public let totalBusinessMXN: Decimal
     /// Sólo categorías con gasto, de mayor a menor.
     public let byCategory: [CategoryTotal]
 
@@ -48,6 +50,9 @@ public struct MonthlySummary {
         self.totalSpentMXN = spent
         self.totalIncomeMXN = inMonth
             .filter { $0.kind == .income }
+            .reduce(Decimal(0)) { $0 + $1.amountInMXN }
+        self.totalBusinessMXN = expenses
+            .filter { $0.isBusiness }
             .reduce(Decimal(0)) { $0 + $1.amountInMXN }
 
         var totals: [ExpenseCategory: Decimal] = [:]
