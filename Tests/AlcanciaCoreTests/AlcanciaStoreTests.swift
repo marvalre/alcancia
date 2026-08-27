@@ -4,6 +4,9 @@ import XCTest
 
 @MainActor
 final class AlcanciaStoreTests: XCTestCase {
+    private func unwrapRecurring(_ result: Result<RecurringExpense, StoreError>) -> RecurringExpense {
+        try! result.get()
+    }
     private func makeTempFileURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("alcancia-test-\(UUID().uuidString).json")
@@ -111,6 +114,56 @@ final class AlcanciaStoreTests: XCTestCase {
         XCTAssertEqual(store.data.monthlyBudgetMXN, 8000)
     }
 
+    func testAddingRecurringReportsPersistenceFailureWithoutPublishing() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("alcancia-store-dir-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = AlcanciaStore(fileURL: directory)
+
+        let result = store.addRecurringExpense(name: "Falla", amountMXN: 10, category: .otro)
+
+        XCTAssertEqual(result, .failure(.persistenceFailed))
+        XCTAssertTrue(store.data.recurringExpenses.isEmpty)
+    }
+
+    func testResetAllEntriesReportsPersistenceFailureWithoutPublishing() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("alcancia-store-dir-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = AlcanciaStore(fileURL: directory)
+
+        let result = store.resetAllEntries()
+
+        XCTAssertEqual(result, .failure(.persistenceFailed))
+        XCTAssertTrue(store.data.entries.isEmpty)
+    }
+
+    func testCompleteOnboardingIsAtomicAndCanRetryWithoutDuplicateAnchor() {
+        let url = makeTempFileURL()
+        let store = AlcanciaStore(fileURL: url)
+
+        XCTAssertEqual(store.completeOnboarding(balance: 1500, budget: 8000), .success(()))
+        XCTAssertEqual(store.data.balanceAdjustments.count, 1)
+        XCTAssertEqual(store.data.monthlyBudgets.count, 1)
+
+        let reloaded = AlcanciaStore(fileURL: url)
+        XCTAssertEqual(reloaded.data.balanceAdjustments.count, 1)
+        XCTAssertEqual(reloaded.data.monthlyBudgets.count, 1)
+    }
+
+    func testCompleteOnboardingFailurePublishesNeitherBalanceNorBudget() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("alcancia-store-dir-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = AlcanciaStore(fileURL: directory)
+
+        let result = store.completeOnboarding(balance: 1500, budget: 8000)
+
+        XCTAssertEqual(result, .failure(.persistenceFailed))
+        XCTAssertTrue(store.data.balanceAdjustments.isEmpty)
+        XCTAssertTrue(store.data.monthlyBudgets.isEmpty)
+    }
+
     func testDataPersistsAcrossStoreInstances() {
         let url = makeTempFileURL()
         let first = AlcanciaStore(fileURL: url)
@@ -135,12 +188,24 @@ final class AlcanciaStoreTests: XCTestCase {
         XCTAssertEqual(second.data.desktopPanelOrigin ?? [], [120, 340])
     }
 
-    func testCorruptFileFallsBackToEmptyDataWithoutCrashing() throws {
+    func testCorruptFileIsReportedWithoutReplacingTheOriginal() throws {
         let url = makeTempFileURL()
         try "not valid json".write(to: url, atomically: true, encoding: .utf8)
         let store = AlcanciaStore(fileURL: url)
         XCTAssertEqual(store.summary(for: Date()).totalSpentMXN, 0)
-        XCTAssertNil(store.data.monthlyBudgetMXN)
+        XCTAssertEqual(store.status, .unrecoverableData)
+        XCTAssertEqual(try String(contentsOf: url), "not valid json")
+    }
+
+    func testUnrecoverableStoreRejectsMutationsAndPreservesOriginal() throws {
+        let url = makeTempFileURL()
+        try "not valid json".write(to: url, atomically: true, encoding: .utf8)
+        let store = AlcanciaStore(fileURL: url)
+
+        guard case .failure(.recoveryRequired) = store.setBalance(500) else {
+            return XCTFail("El store corrupto no debe aceptar mutaciones")
+        }
+        XCTAssertEqual(try String(contentsOf: url), "not valid json")
     }
 
     /// El archivo que dejó la versión anterior tiene que abrirse sin perder
@@ -249,9 +314,9 @@ final class AlcanciaStoreTests: XCTestCase {
 
     func testAddUpdateAndDeleteRecurringExpense() {
         let store = AlcanciaStore(fileURL: makeTempFileURL())
-        let recurring = store.addRecurringExpense(
+        let recurring = unwrapRecurring(store.addRecurringExpense(
             name: "Adobe CC", amountMXN: 399, category: .software, isBusiness: true
-        )
+        ))
         XCTAssertEqual(store.data.recurringExpenses.count, 1)
 
         var updated = recurring
@@ -263,9 +328,9 @@ final class AlcanciaStoreTests: XCTestCase {
         XCTAssertTrue(store.data.recurringExpenses.isEmpty)
     }
 
-    func testUnloggedRecurringReportsTemplatesWithoutAMatchingNoteInTheMonth() {
+    func testManualNoteDoesNotMarkARecurringTemplateAsLogged() {
         let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
-        let adobe = store.addRecurringExpense(name: "Adobe CC", amountMXN: 399, category: .software)
+        let adobe = unwrapRecurring(store.addRecurringExpense(name: "Adobe CC", amountMXN: 399, category: .software))
         store.addRecurringExpense(name: "Figma", amountMXN: 200, category: .software)
 
         // Ya hay un movimiento este mes cuyo note coincide con "Adobe CC".
@@ -273,8 +338,7 @@ final class AlcanciaStoreTests: XCTestCase {
                        category: .software, note: "Adobe CC", date: date(2026, 8, 3))
 
         let unlogged = store.unloggedRecurring(for: date(2026, 8, 15))
-        XCTAssertEqual(unlogged.map(\.name), ["Figma"])
-        XCTAssertFalse(unlogged.contains { $0.id == adobe.id })
+        XCTAssertEqual(Set(unlogged.map(\.id)), Set([adobe.id, store.data.recurringExpenses[1].id]))
     }
 
     func testLogRecurringCreatesOneEntryPerUnloggedTemplateDatedToday() {
@@ -362,5 +426,161 @@ final class AlcanciaStoreTests: XCTestCase {
         first.setShowsBalance(true)
         let second = AlcanciaStore(fileURL: url)
         XCTAssertTrue(second.data.showsBalance)
+    }
+
+    // MARK: - Saldo anclado y presupuestos históricos
+
+    func testBalanceAnchorIgnoresEarlierEntriesAndIncludesLaterEntries() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        store.addEntry(amount: 5_000, currency: .mxn, kind: .income, date: date(2026, 8, 1))
+        store.setBalance(1_000, note: "Saldo contado", date: date(2026, 8, 10))
+        store.addEntry(amount: 200, currency: .mxn, kind: .expense, category: .comida, date: date(2026, 8, 11))
+
+        XCTAssertEqual(store.balance(at: date(2026, 8, 12)), 800)
+    }
+
+    func testMonthClosingBalanceBecomesTheNextMonthsOpeningBalance() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        store.setBalance(1_000, date: date(2026, 8, 1))
+        store.addEntry(amount: 150, currency: .mxn, kind: .expense, category: .comida, date: date(2026, 8, 15))
+
+        XCTAssertEqual(store.closingBalance(for: date(2026, 8, 20)), 850)
+        XCTAssertEqual(store.openingBalance(for: date(2026, 9, 20)), 850)
+    }
+
+    func testChangingSeptemberBudgetLeavesAugustBudgetUnchanged() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        store.setBudget(1_000, for: date(2026, 8, 12))
+        store.setBudget(2_000, for: date(2026, 9, 12))
+
+        XCTAssertEqual(store.budget(for: date(2026, 8, 20)), 1_000)
+        XCTAssertEqual(store.budget(for: date(2026, 9, 20)), 2_000)
+    }
+
+    func testRecurringTemplatesWithTheSameNameRemainIndependent() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        let first = unwrapRecurring(store.addRecurringExpense(name: "Suscripción", amountMXN: 100, category: .software))
+        let second = unwrapRecurring(store.addRecurringExpense(name: "Suscripción", amountMXN: 200, category: .software))
+        let month = Date()
+
+        store.logRecurring(for: month)
+
+        XCTAssertEqual(Set(store.summary(for: month).entriesInMonth.compactMap(\.recurringExpenseID)), Set([first.id, second.id]))
+    }
+
+    func testMovingARecurringEntryChangesTheMonthItMarksAsLogged() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        let recurring = unwrapRecurring(store.addRecurringExpense(name: "Internet", amountMXN: 600, category: .casa))
+        let august = date(2026, 8, 15)
+        let september = date(2026, 9, 15)
+        store.logRecurring(for: august)
+
+        guard var entry = store.data.entries.first else {
+            return XCTFail("Debió existir el movimiento recurrente de agosto")
+        }
+        entry.date = september
+        guard case .success = store.updateEntry(entry) else {
+            return XCTFail("Mover el movimiento recurrente debió guardarse")
+        }
+
+        XCTAssertEqual(store.unloggedRecurring(for: august).map(\.id), [recurring.id])
+        XCTAssertTrue(store.unloggedRecurring(for: september).isEmpty)
+    }
+
+    func testSkippingRecurringExpenseOnlySkipsThatTemplateForThatMonth() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        let first = unwrapRecurring(store.addRecurringExpense(name: "Suscripción", amountMXN: 100, category: .software))
+        let second = unwrapRecurring(store.addRecurringExpense(name: "Suscripción", amountMXN: 200, category: .software))
+        let august = date(2026, 8, 15)
+
+        store.skipRecurring(id: first.id, for: august)
+
+        XCTAssertEqual(store.unloggedRecurring(for: august).map(\.id), [second.id])
+    }
+
+    // MARK: - Persistencia recuperable y validación
+
+    func testFailedSaveDoesNotPublishTheCandidateMutation() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("data.json")
+        let store = AlcanciaStore(fileURL: url, calendar: calendar)
+
+        guard case .failure(.persistenceFailed) = store.setBudget(1_000, for: date(2026, 8, 1)) else {
+            return XCTFail("La mutación debió informar un error de persistencia")
+        }
+        XCTAssertNil(store.budget(for: date(2026, 8, 15)))
+    }
+
+    func testSuccessfulMutationPublishesOnlyAfterSaving() throws {
+        let url = makeTempFileURL()
+        let store = AlcanciaStore(fileURL: url, calendar: calendar)
+
+        guard case .success = store.setBudget(1_000, for: date(2026, 8, 1)) else {
+            return XCTFail("La mutación debió guardarse")
+        }
+        XCTAssertEqual(store.budget(for: date(2026, 8, 15)), 1_000)
+        XCTAssertFalse(try Data(contentsOf: url).isEmpty)
+    }
+
+    func testPersistenceKeepsFiveRotatingBackups() throws {
+        let url = makeTempFileURL()
+        let store = AlcanciaStore(fileURL: url, calendar: calendar)
+        for amount in 1...6 {
+            guard case .success = store.setBudget(Decimal(amount), for: date(2026, 8, 1)) else {
+                return XCTFail("El presupuesto \(amount) debió guardarse")
+            }
+        }
+
+        for index in 1...5 {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.appendingPathExtension("backup-\(index)").path))
+        }
+    }
+
+    func testCorruptPrimaryLoadsTheMostRecentValidBackup() throws {
+        let url = makeTempFileURL()
+        let backup = AlcanciaData(monthlyBudgetMXN: 777)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(backup).write(to: url.appendingPathExtension("backup-1"))
+        try "corrupt".write(to: url, atomically: true, encoding: .utf8)
+
+        let store = AlcanciaStore(fileURL: url, calendar: calendar)
+
+        XCTAssertEqual(store.status, .recoveredFromBackup)
+        XCTAssertEqual(store.data.monthlyBudgetMXN, 777)
+        XCTAssertEqual(try String(contentsOf: url), "corrupt")
+    }
+
+    func testMutationBoundaryRejectsInvalidAmountsAndRates() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+
+        XCTAssertEqual(store.addEntryResult(amount: 0, currency: .mxn), .failure(.invalidAmount))
+        XCTAssertEqual(store.addEntryResult(amount: 1, currency: .usd, exchangeRate: 0), .failure(.invalidExchangeRate))
+        XCTAssertEqual(store.addEntryResult(amount: 1, currency: .usd), .failure(.missingUSDExchangeRate))
+    }
+
+    func testRestoringADeletedEntryPreservesItsIdentityAndTotals() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        let entry = store.addEntry(amount: 250, currency: .mxn, category: .comida)
+        store.deleteEntry(id: entry.id)
+
+        guard case .success = store.restoreEntry(entry) else {
+            return XCTFail("El movimiento eliminado debió restaurarse")
+        }
+        XCTAssertEqual(store.data.entries.map(\.id), [entry.id])
+        XCTAssertEqual(store.summary(for: Date()).totalSpentMXN, 250)
+    }
+
+    func testLoggingRecurringExpensesUsesOneObservableResult() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL(), calendar: calendar)
+        store.addRecurringExpense(name: "Adobe", amountMXN: 399, category: .software)
+        store.addRecurringExpense(name: "Música", amountMXN: 129, category: .ocio)
+
+        guard case .success(let count) = store.logRecurringResult(for: Date()) else {
+            return XCTFail("Las recurrentes debieron guardarse juntas")
+        }
+        XCTAssertEqual(count, 2)
+        XCTAssertEqual(store.data.entries.count, 2)
     }
 }

@@ -83,6 +83,10 @@ struct DesktopPanelView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .contentShape(RoundedRectangle(cornerRadius: 16))
         .onTapGesture(perform: onActivate)
+        .accessibilityRepresentation {
+            Button("Abrir captura rápida", action: onActivate)
+                .accessibilityHint(accessibilitySummary)
+        }
         .onHover { hovering in
             if hovering {
                 NSCursor.pointingHand.push()
@@ -92,6 +96,10 @@ struct DesktopPanelView: View {
         }
         .animation(.default, value: summary.totalSpentMXN)
         .animation(.default, value: store.balanceMXN)
+    }
+
+    private var accessibilitySummary: String {
+        "\(headline), \(subcaption)"
     }
 
     /// El número grande: lo que queda, no lo que ya se gastó. Sin

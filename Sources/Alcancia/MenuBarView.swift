@@ -8,6 +8,8 @@ struct MenuBarView: View {
     @State private var month = Date()
     @State private var listMode: ListMode = .movimientos
     @State private var showingSettings = false
+    @State private var entryFilter = EntryFilter()
+    @AppStorage("didDeferBalanceOnboarding") private var didDeferOnboarding = false
 
     private enum ListMode: String, CaseIterable, Identifiable {
         case movimientos = "Movimientos"
@@ -29,8 +31,16 @@ struct MenuBarView: View {
 
     var body: some View {
         Group {
-            if showingSettings {
-                SettingsView(store: store, onClose: { showingSettings = false })
+            if store.status == .unrecoverableData {
+                DataRecoveryView(store: store)
+            } else if store.data.balanceAdjustments.isEmpty && !didDeferOnboarding {
+                OnboardingView(
+                    store: store,
+                    onFinish: { didDeferOnboarding = false },
+                    onDefer: { didDeferOnboarding = true }
+                )
+            } else if showingSettings {
+                SettingsView(store: store, month: month, onClose: { showingSettings = false })
             } else {
                 mainContent
             }
@@ -40,6 +50,19 @@ struct MenuBarView: View {
 
     private var mainContent: some View {
         VStack(spacing: 0) {
+            if store.status == .recoveredFromBackup {
+                HStack {
+                    Image(systemName: "checkmark.shield")
+                    Text("Se recuperó un respaldo de tus datos.")
+                    Spacer()
+                    Button("Ver") { showingSettings = true }
+                        .buttonStyle(.borderless)
+                }
+                .font(.caption)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.12))
+            }
             MonthHeaderView(store: store, month: $month, onOpenSettings: { showingSettings = true })
             Divider()
             QuickAddView(store: store)
@@ -61,7 +84,8 @@ struct MenuBarView: View {
 
             switch listMode {
             case .movimientos:
-                HistoryView(store: store, summary: summary)
+                HistoryFilterBar(filter: $entryFilter)
+                HistoryView(store: store, summary: summary, filter: entryFilter)
             case .categorias:
                 CategoryBreakdownView(store: store, summary: summary)
             }
@@ -82,10 +106,17 @@ struct MenuBarView: View {
 
             Spacer(minLength: 4)
 
-            Button("Registrar") {
-                store.logRecurring(for: month)
+            Menu("Revisar") {
+                Button("Registrar todas") {
+                    store.logRecurring(for: month)
+                }
+                Divider()
+                ForEach(unloggedRecurring) { recurring in
+                    Button("Omitir \(recurring.name) este mes") {
+                        store.skipRecurring(id: recurring.id, for: month)
+                    }
+                }
             }
-            .buttonStyle(.borderless)
             .font(.caption.weight(.semibold))
         }
         .padding(.horizontal, 14)
@@ -107,6 +138,7 @@ struct MenuBarView: View {
                 Image(systemName: "gearshape.fill")
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Abrir ajustes")
 
             Spacer()
 

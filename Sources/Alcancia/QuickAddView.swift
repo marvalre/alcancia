@@ -23,11 +23,11 @@ struct QuickAddView: View {
     @State private var noticeMessage: String?
 
     private var parsedAmount: Decimal? {
-        Decimal(string: amountText.replacingOccurrences(of: ",", with: ""))
+        MoneyParser.parse(amountText)
     }
 
     private var parsedManualRate: Double? {
-        Double(manualRateText.replacingOccurrences(of: ",", with: ""))
+        MoneyParser.parse(manualRateText).map { NSDecimalNumber(decimal: $0).doubleValue }
     }
 
     private var canSubmit: Bool {
@@ -71,6 +71,7 @@ struct QuickAddView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!canSubmit)
                 .help("Agregar")
+                .accessibilityLabel("Agregar movimiento")
             }
 
             HStack(spacing: 8) {
@@ -121,6 +122,7 @@ struct QuickAddView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .disabled(isResolvingRate)
         .onAppear {
             category = store.data.lastUsedCategory ?? .otro
             isBusiness = store.data.lastUsedIsBusiness
@@ -131,30 +133,37 @@ struct QuickAddView: View {
 
     private func submit() {
         guard canSubmit else { return }
-        Task { await addEntry() }
+        let submission = Submission(
+            amount: parsedAmount!,
+            currency: currency,
+            kind: kind,
+            category: category,
+            note: noteText,
+            isBusiness: isBusiness,
+            manualRate: needsManualRate ? parsedManualRate : nil
+        )
+        if currency == .usd && !needsManualRate { isResolvingRate = true }
+        Task { await addEntry(submission) }
     }
 
     @MainActor
-    private func addEntry() async {
-        guard let amount = parsedAmount, amount > 0 else { return }
+    private func addEntry(_ submission: Submission) async {
         errorMessage = nil
         noticeMessage = nil
 
-        if currency == .mxn {
-            commit(amount: amount, rate: nil)
+        if submission.currency == .mxn {
+            commit(submission, rate: nil)
             return
         }
 
-        if needsManualRate {
-            guard let rate = parsedManualRate, rate > 0 else { return }
+        if let rate = submission.manualRate {
             store.recordExchangeRate(rate)
-            commit(amount: amount, rate: rate)
+            commit(submission, rate: rate)
             manualRateText = ""
             needsManualRate = false
             return
         }
 
-        isResolvingRate = true
         let service = ExchangeRateService()
         let result = await service.resolveRate(
             cachedRate: store.data.lastKnownUSDMXNRate,
@@ -173,23 +182,37 @@ struct QuickAddView: View {
         } else {
             store.recordExchangeRate(result.rate, date: result.asOf)
         }
-        commit(amount: amount, rate: result.rate)
+        commit(submission, rate: result.rate)
     }
 
-    private func commit(amount: Decimal, rate: Double?) {
-        store.addEntry(
-            amount: amount,
-            currency: currency,
-            kind: kind,
-            category: kind == .expense ? category : nil,
-            note: noteText,
+    private func commit(_ submission: Submission, rate: Double?) {
+        let result = store.addEntryResult(
+            amount: submission.amount,
+            currency: submission.currency,
+            kind: submission.kind,
+            category: submission.kind == .expense ? submission.category : nil,
+            note: submission.note,
             exchangeRate: rate,
-            isBusiness: isBusiness
+            isBusiness: submission.isBusiness
         )
+        guard case .success = result else {
+            errorMessage = "No se pudo guardar el movimiento. Revisa el archivo de datos en Ajustes."
+            return
+        }
         amountText = ""
         noteText = ""
         // Listo para el siguiente sin tocar el mouse.
         amountFocused = true
+    }
+
+    private struct Submission {
+        let amount: Decimal
+        let currency: Currency
+        let kind: EntryKind
+        let category: ExpenseCategory
+        let note: String
+        let isBusiness: Bool
+        let manualRate: Double?
     }
 
     private static let dateFormatter: DateFormatter = {

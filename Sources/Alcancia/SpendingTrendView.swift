@@ -66,6 +66,20 @@ struct SpendingTrendView: View {
             }
         }
         .chartYAxis(.hidden)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Gasto de los últimos seis meses")
+        .accessibilityValue(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        trend.series.map { month in
+            let name = Self.monthFormatter.string(from: month.month)
+            let amount = NumberFormatter.localizedString(
+                from: month.totalMXN as NSDecimalNumber,
+                number: .currency
+            )
+            return "\(name): \(amount)"
+        }.joined(separator: ", ")
     }
 
     private func doubleValue(_ decimal: Decimal) -> Double {

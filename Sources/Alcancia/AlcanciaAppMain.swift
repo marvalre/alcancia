@@ -71,7 +71,7 @@ struct AlcanciaAppMain: App {
         // funcionaría hasta que el usuario ya hubiera usado el mouse una vez.
         // `init()` de `App` corre al arrancar, garantizado, así que el atajo
         // queda vivo desde el primer instante.
-        HotKeyManager.shared.register {
+        HotKeyManager.shared.register(shortcut: .saved) {
             quickCapture.toggle()
         }
     }

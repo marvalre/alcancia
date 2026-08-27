@@ -21,6 +21,8 @@ public struct Entry: Identifiable, Codable, Equatable {
     public var category: ExpenseCategory?
     public var note: String?
     public var isBusiness: Bool
+    public var recurringExpenseID: UUID?
+    public var recurringPeriod: MonthKey?
 
     public init(
         id: UUID = UUID(),
@@ -32,7 +34,9 @@ public struct Entry: Identifiable, Codable, Equatable {
         kind: EntryKind = .expense,
         category: ExpenseCategory? = nil,
         note: String? = nil,
-        isBusiness: Bool = false
+        isBusiness: Bool = false,
+        recurringExpenseID: UUID? = nil,
+        recurringPeriod: MonthKey? = nil
     ) {
         self.id = id
         self.amount = amount
@@ -44,6 +48,8 @@ public struct Entry: Identifiable, Codable, Equatable {
         self.category = category
         self.note = note
         self.isBusiness = isBusiness
+        self.recurringExpenseID = recurringExpenseID
+        self.recurringPeriod = recurringPeriod
     }
 
     public init(from decoder: Decoder) throws {
@@ -61,5 +67,7 @@ public struct Entry: Identifiable, Codable, Equatable {
         category = try container.decodeIfPresent(ExpenseCategory.self, forKey: .category)
         note = try container.decodeIfPresent(String.self, forKey: .note)
         isBusiness = try container.decodeIfPresent(Bool.self, forKey: .isBusiness) ?? false
+        recurringExpenseID = try container.decodeIfPresent(UUID.self, forKey: .recurringExpenseID)
+        recurringPeriod = try container.decodeIfPresent(MonthKey.self, forKey: .recurringPeriod)
     }
 }

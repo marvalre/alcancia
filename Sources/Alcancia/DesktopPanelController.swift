@@ -60,7 +60,10 @@ final class DesktopPanelController: ObservableObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
         if let origin = store.data.desktopPanelOrigin, origin.count == 2 {
-            panel.setFrameOrigin(NSPoint(x: origin[0], y: origin[1]))
+            panel.setFrameOrigin(visibleOrigin(
+                for: NSPoint(x: origin[0], y: origin[1]),
+                panelSize: hosting.view.frame.size
+            ))
         } else {
             panel.center()
         }
@@ -81,6 +84,23 @@ final class DesktopPanelController: ObservableObject {
 
         panel.orderFront(nil)
         self.panel = panel
+    }
+
+    /// Una pantalla desconectada no puede dejar el panel perdido fuera del
+    /// escritorio. Si todavía toca una pantalla, lo ajusta dentro de su área
+    /// visible; si no, vuelve al centro de la pantalla principal.
+    private func visibleOrigin(for saved: NSPoint, panelSize: NSSize) -> NSPoint {
+        let proposed = NSRect(origin: saved, size: panelSize)
+        guard let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(proposed) }) else {
+            guard let frame = NSScreen.main?.visibleFrame else { return saved }
+            return NSPoint(x: frame.midX - panelSize.width / 2, y: frame.midY - panelSize.height / 2)
+        }
+
+        let frame = screen.visibleFrame
+        return NSPoint(
+            x: min(max(saved.x, frame.minX), frame.maxX - panelSize.width),
+            y: min(max(saved.y, frame.minY), frame.maxY - panelSize.height)
+        )
     }
 
     private func hide() {

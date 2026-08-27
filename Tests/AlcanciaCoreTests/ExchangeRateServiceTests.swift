@@ -28,4 +28,12 @@ final class ExchangeRateServiceTests: XCTestCase {
         let result = await service.resolveRate(cachedRate: nil, cachedDate: nil)
         XCTAssertNil(result)
     }
+
+    func testRejectsInvalidLiveAndCachedRates() async {
+        let service = ExchangeRateService(fetcher: FakeFetcher(result: .infinity))
+
+        let result = await service.resolveRateResult(cachedRate: 0, cachedDate: Date())
+
+        XCTAssertEqual(result, .failure(.invalidExchangeRate))
+    }
 }

@@ -24,6 +24,7 @@ struct MonthHeaderView: View {
                     Image(systemName: "chevron.left")
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Mes anterior")
 
                 Spacer()
 
@@ -39,6 +40,7 @@ struct MonthHeaderView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(isShowingCurrentMonth)
+                .accessibilityLabel("Mes siguiente")
             }
 
             Text(headlineAmount)
@@ -50,12 +52,12 @@ struct MonthHeaderView: View {
                 .animation(.default, value: store.balanceMXN)
 
             if store.data.showsBalance {
-                Text("tu saldo · gastado este mes: \(store.formattedAmount(summary.totalSpentMXN))")
+                Text("saldo al cierre · gastado este mes: \(store.formattedAmount(summary.totalSpentMXN))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            if let budget = store.data.monthlyBudgetMXN, budget > 0 {
+            if let budget = store.budget(for: month), budget > 0 {
                 ProgressView(value: 1 - (progress.fractionRemaining ?? 0))
                     .tint(progress.isOverBudget ? .red : .accentColor)
                 Text(budgetCaption(budget: budget))
@@ -95,13 +97,13 @@ struct MonthHeaderView: View {
     /// reemplazo: por defecto muestra lo gastado, como siempre.
     private var headlineAmount: String {
         store.data.showsBalance
-            ? store.formattedAmount(store.balanceMXN)
+            ? store.formattedAmount(store.closingBalance(for: month))
             : store.formattedAmount(summary.totalSpentMXN)
     }
 
     private var headlineColor: Color {
         if store.data.showsBalance {
-            return store.balanceMXN < 0 ? .red : .primary
+            return store.closingBalance(for: month) < 0 ? .red : .primary
         }
         return progress.isOverBudget ? .red : .primary
     }
