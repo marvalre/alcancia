@@ -41,9 +41,19 @@ struct MonthHeaderView: View {
                 .disabled(isShowingCurrentMonth)
             }
 
-            Text(store.formattedAmount(summary.totalSpentMXN))
+            Text(headlineAmount)
                 .font(.system(size: 30, weight: .bold, design: .rounded))
-                .foregroundStyle(progress.isOverBudget ? Color.red : Color.primary)
+                .foregroundStyle(headlineColor)
+                .contentTransition(.numericText())
+                .animation(.default, value: store.data.showsBalance)
+                .animation(.default, value: summary.totalSpentMXN)
+                .animation(.default, value: store.balanceMXN)
+
+            if store.data.showsBalance {
+                Text("tu saldo · gastado este mes: \(store.formattedAmount(summary.totalSpentMXN))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             if let budget = store.data.monthlyBudgetMXN, budget > 0 {
                 ProgressView(value: 1 - (progress.fractionRemaining ?? 0))
@@ -77,6 +87,23 @@ struct MonthHeaderView: View {
         .padding(.horizontal, 14)
         .padding(.top, 12)
         .padding(.bottom, 8)
+    }
+
+    /// El número grande: lo gastado este mes, o — con el saldo activado en
+    /// Ajustes — el dinero real del usuario, ingresos menos gastos de todo
+    /// el tiempo. Sigue siendo una lectura alterna opcional, no un
+    /// reemplazo: por defecto muestra lo gastado, como siempre.
+    private var headlineAmount: String {
+        store.data.showsBalance
+            ? store.formattedAmount(store.balanceMXN)
+            : store.formattedAmount(summary.totalSpentMXN)
+    }
+
+    private var headlineColor: Color {
+        if store.data.showsBalance {
+            return store.balanceMXN < 0 ? .red : .primary
+        }
+        return progress.isOverBudget ? .red : .primary
     }
 
     private func budgetCaption(budget: Decimal) -> String {

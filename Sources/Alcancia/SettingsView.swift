@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var budgetText: String = ""
     @State private var launchAtLogin: Bool = false
     @State private var showsDesktopPanel: Bool = false
+    @State private var showsBalance: Bool = false
     @State private var loginItemError: String?
     @State private var confirmingReset = false
 
@@ -50,6 +51,16 @@ struct SettingsView: View {
                     }
                 }
                 Text("El cerdito de la barra arranca lleno cada mes y se vacía conforme gastas.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Mostrar mi saldo en vez de lo gastado", isOn: $showsBalance)
+                    .onChange(of: showsBalance) { _, newValue in
+                        store.setShowsBalance(newValue)
+                    }
+                Text("El número grande pasa a ser tu dinero real: todos tus ingresos menos todos tus gastos.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -113,6 +124,7 @@ struct SettingsView: View {
             budgetText = "\(budget)"
         }
         showsDesktopPanel = store.data.showsDesktopPanel
+        showsBalance = store.data.showsBalance
         // Sembramos el interruptor con el estado real del sistema, no la
         // preferencia guardada, para que no pueda mentir si el registro
         // había fallado en una sesión anterior.

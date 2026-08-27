@@ -14,6 +14,11 @@ public struct AlcanciaData: Codable {
     public var desktopPanelOrigin: [Double]?
     public var recurringExpenses: [RecurringExpense]
     public var lastUsedIsBusiness: Bool
+    /// Si `true`, el número grande del encabezado muestra el saldo real
+    /// (ingresos menos gastos, de todo el tiempo) en vez de lo gastado este
+    /// mes. Por defecto apagado: la identidad de la app sigue siendo control
+    /// de gasto, esto es una lectura alterna opcional.
+    public var showsBalance: Bool
 
     public init(
         monthlyBudgetMXN: Decimal? = nil,
@@ -25,7 +30,8 @@ public struct AlcanciaData: Codable {
         showsDesktopPanel: Bool = false,
         desktopPanelOrigin: [Double]? = nil,
         recurringExpenses: [RecurringExpense] = [],
-        lastUsedIsBusiness: Bool = false
+        lastUsedIsBusiness: Bool = false,
+        showsBalance: Bool = false
     ) {
         self.monthlyBudgetMXN = monthlyBudgetMXN
         self.entries = entries
@@ -37,6 +43,7 @@ public struct AlcanciaData: Codable {
         self.desktopPanelOrigin = desktopPanelOrigin
         self.recurringExpenses = recurringExpenses
         self.lastUsedIsBusiness = lastUsedIsBusiness
+        self.showsBalance = showsBalance
     }
 
     /// Todo campo agregado después de la primera versión se decodifica con
@@ -55,6 +62,7 @@ public struct AlcanciaData: Codable {
         desktopPanelOrigin = try container.decodeIfPresent([Double].self, forKey: .desktopPanelOrigin)
         recurringExpenses = try container.decodeIfPresent([RecurringExpense].self, forKey: .recurringExpenses) ?? []
         lastUsedIsBusiness = try container.decodeIfPresent(Bool.self, forKey: .lastUsedIsBusiness) ?? false
+        showsBalance = try container.decodeIfPresent(Bool.self, forKey: .showsBalance) ?? false
     }
 }
 
@@ -109,6 +117,20 @@ public final class AlcanciaStore: ObservableObject {
 
     public func spendingTrend(months: Int = 6, endingAt month: Date) -> SpendingTrend {
         SpendingTrend(entries: data.entries, endingAt: month, months: months, calendar: calendar)
+    }
+
+    /// El dinero que de verdad tienes: todos los ingresos menos todos los
+    /// gastos, de todo el tiempo. A diferencia de `summary(for:).totalSpentMXN`,
+    /// no se reinicia cada mes — es un saldo, no un corte mensual.
+    public var balanceMXN: Decimal {
+        data.entries.reduce(Decimal(0)) { partial, entry in
+            switch entry.kind {
+            case .income:
+                return partial + entry.amountInMXN
+            case .expense:
+                return partial - entry.amountInMXN
+            }
+        }
     }
 
     /// Lo que lee VoiceOver del ícono de la barra de menú.
@@ -257,6 +279,11 @@ public final class AlcanciaStore: ObservableObject {
 
     public func setShowsDesktopPanel(_ shows: Bool) {
         data.showsDesktopPanel = shows
+        save()
+    }
+
+    public func setShowsBalance(_ shows: Bool) {
+        data.showsBalance = shows
         save()
     }
 

@@ -314,4 +314,53 @@ final class AlcanciaStoreTests: XCTestCase {
         let second = AlcanciaStore(fileURL: url)
         XCTAssertEqual(second.data.recurringExpenses.map(\.name), ["ChatGPT"])
     }
+
+    // MARK: - Saldo (ingresos menos gastos, de todo el tiempo)
+
+    func testBalanceWithOnlyIncome() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL())
+        store.addEntry(amount: 5000, currency: .mxn, kind: .income, date: date(2026, 8, 5))
+        store.addEntry(amount: 1000, currency: .mxn, kind: .income, date: date(2026, 7, 5))
+        XCTAssertEqual(store.balanceMXN, 6000)
+    }
+
+    /// Los números reales del usuario: ingresos 4531, gastos 1300, saldo 3231.
+    /// Fijado exactamente para no volver a romper la aritmética.
+    func testBalanceSubtractsExpensesFromIncomeExactly() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL())
+        store.addEntry(amount: 4531, currency: .mxn, kind: .income, date: date(2026, 8, 1))
+        store.addEntry(amount: 1300, currency: .mxn, kind: .expense,
+                       category: .comida, date: date(2026, 8, 5))
+        XCTAssertEqual(store.balanceMXN, 3231)
+    }
+
+    func testBalanceIsNegativeWhenExpensesExceedIncome() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL())
+        store.addEntry(amount: 500, currency: .mxn, kind: .income, date: date(2026, 8, 1))
+        store.addEntry(amount: 1300, currency: .mxn, kind: .expense,
+                       category: .comida, date: date(2026, 8, 5))
+        XCTAssertEqual(store.balanceMXN, -800)
+    }
+
+    func testBalanceIgnoresMonthBoundariesAndCountsAllEntries() {
+        let store = AlcanciaStore(fileURL: makeTempFileURL())
+        store.addEntry(amount: 2000, currency: .mxn, kind: .income, date: date(2026, 1, 5))
+        store.addEntry(amount: 300, currency: .mxn, kind: .expense,
+                       category: .comida, date: date(2026, 3, 5))
+        store.addEntry(amount: 1000, currency: .mxn, kind: .income, date: date(2026, 8, 5))
+        store.addEntry(amount: 200, currency: .mxn, kind: .expense,
+                       category: .transporte, date: date(2026, 8, 20))
+        // Nada de esto se filtra por mes: el saldo suma todo el historial.
+        XCTAssertEqual(store.balanceMXN, 2500)
+    }
+
+    func testShowsBalanceDefaultsToFalseAndPersistsAcrossStoreInstances() {
+        let url = makeTempFileURL()
+        let first = AlcanciaStore(fileURL: url)
+        XCTAssertFalse(first.data.showsBalance)
+
+        first.setShowsBalance(true)
+        let second = AlcanciaStore(fileURL: url)
+        XCTAssertTrue(second.data.showsBalance)
+    }
 }

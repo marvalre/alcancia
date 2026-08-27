@@ -91,12 +91,15 @@ struct DesktopPanelView: View {
             }
         }
         .animation(.default, value: summary.totalSpentMXN)
+        .animation(.default, value: store.balanceMXN)
     }
 
     /// El número grande: lo que queda, no lo que ya se gastó. Sin
     /// presupuesto no hay nada accionable que liderar, así que cae al total
-    /// gastado.
+    /// gastado. Con el saldo activado, esto se reemplaza por el dinero real
+    /// del usuario — ingresos menos gastos, de todo el tiempo.
     private var headline: String {
+        if store.data.showsBalance { return store.formattedAmount(store.balanceMXN) }
         guard hasBudget else { return store.formattedAmount(summary.totalSpentMXN) }
         if progress.isOverBudget, let remaining = progress.remainingMXN {
             return store.formattedAmount(-remaining)
@@ -108,13 +111,18 @@ struct DesktopPanelView: View {
     }
 
     private var headlineColor: Color {
+        if store.data.showsBalance { return store.balanceMXN < 0 ? .red : .primary }
         guard hasBudget else { return .primary }
         return progress.isOverBudget ? .red : .primary
     }
 
     /// El gasto queda relegado a subtítulo: es historia, no la decisión de
-    /// hoy.
+    /// hoy. Con el saldo activado, el subtítulo aclara qué es el número
+    /// grande y qué se gastó este mes en concreto.
     private var subcaption: String {
+        if store.data.showsBalance {
+            return "tu saldo · gastado este mes: \(store.formattedAmount(summary.totalSpentMXN))"
+        }
         guard hasBudget else { return "sin presupuesto este mes" }
         if progress.isOverBudget {
             return "te pasaste · gastaste \(store.formattedAmount(summary.totalSpentMXN))"
