@@ -58,16 +58,28 @@ usuario ve la confirmación, le pica, y todo desaparece sin borrar nada.
 Pasó de verdad. Por eso las confirmaciones son en línea y Ajustes se abre
 dentro del mismo panel.
 
-## Cómo se guarda
+## Privacidad — y cómo comprobarla
 
-Un JSON local en `~/Library/Application Support/Alcancia/data.json`. Sin
-telemetría. La única llamada de red es la consulta pública y gratuita del
-tipo de cambio USD→MXN (api.frankfurter.app) cuando capturas en dólares.
+Tus movimientos nunca salen de tu Mac. No hay cuenta, no hay servidor, no
+hay telemetría, y no hay forma de que alguien más los vea.
 
-Los archivos de versiones anteriores se abren sin perder nada: cada campo
-nuevo se decodifica con valor por defecto, y los movimientos viejos se
-leen como ingresos. Hay dos pruebas dedicadas a eso, porque un fallo ahí
-se ve como "la app me borró el dinero".
+Todo se guarda en un solo archivo de texto que puedes abrir tú mismo:
+
+```bash
+cat ~/Library/Application\ Support/Alcancia/data.json
+```
+
+La app hace **exactamente una** llamada de red en toda su vida: consultar
+el tipo de cambio USD→MXN en `api.frankfurter.app` (API pública y
+gratuita, sin llave), y sólo cuando capturas un movimiento en dólares. No
+manda nada — sólo pregunta cuánto vale el dólar. Si no tienes internet,
+usa el último tipo de cambio que guardó y te lo dice.
+
+No tienes que creerme: es la única URL en el código, y la puedes ver aquí:
+
+```bash
+grep -rn "https://" Sources/
+```
 
 ## Estructura
 
@@ -84,36 +96,60 @@ alcancia/
   build_app.sh       # empaqueta Alcancía.app firmado ad-hoc
 ```
 
-## Cómo correrla
+## Instalación
+
+**Requisitos:** macOS 14 (Sonoma) o más nuevo, en una Mac con Apple
+Silicon.
+
+### Opción A — descargar la app ya compilada
+
+Bájala de la sección [Releases](https://github.com/marvalre/alcancia/releases),
+descomprime, y arrástrala a Aplicaciones. La primera vez macOS la va a
+bloquear porque está firmada ad-hoc y no con un certificado de Apple (esos
+cuestan $99 USD al año). Se quita así, una sola vez:
 
 ```bash
+xattr -dr com.apple.quarantine "/Applications/Alcancía.app"
+open "/Applications/Alcancía.app"
+```
+
+### Opción B — compilarla tú
+
+Necesitas Xcode o las Command Line Tools (`xcode-select --install`).
+
+```bash
+git clone https://github.com/marvalre/alcancia.git
 cd alcancia
 ./build_app.sh
 open "Alcancía.app"
 ```
 
-Para tenerla siempre a la mano:
+El script compila en modo release, arma el bundle y lo firma ad-hoc para
+que Gatekeeper la deje correr localmente.
+
+### Al abrirla
+
+**No busques una ventana ni un ícono en el Dock: no los tiene.** Es una
+app de barra de menú. Busca el cerdito arriba a la derecha, junto al wifi
+y la batería.
+
+Lo primero que conviene hacer es abrir Ajustes (el engrane) y **definir tu
+presupuesto mensual**. Sin eso el cerdito se queda vacío y la mitad de la
+app no tiene de qué agarrarse.
+
+## Desarrollo
 
 ```bash
-mv "Alcancía.app" /Applications/
+swift build          # compilar
+swift test           # 61 pruebas sobre AlcanciaCore
+swift run Alcancia   # correr sin empaquetar
 ```
 
-Pruebas:
+`AlcanciaCore` no importa SwiftUI: todo el cálculo de dinero, meses,
+presupuesto y tendencias vive ahí y se prueba por línea de comandos. La
+capa de SwiftUI no lleva pruebas automatizadas — se verifica abriendo la
+app.
 
-```bash
-swift test
-```
+## Licencia
 
-## Compartirla con alguien
-
-Está firmada ad-hoc, no con un certificado de Apple, así que en otra Mac
-macOS la bloquea al abrirla. De ese lado hay que quitar la marca de
-cuarentena una sola vez:
-
-```bash
-xattr -dr com.apple.quarantine "/Applications/Alcancía.app"
-```
-
-Mándala por AirDrop y no por WhatsApp: WhatsApp recomprime y se come los
-permisos de ejecución, y entonces la app "no se puede abrir" sin decir por
-qué. El binario es arm64, así que necesita una Mac con Apple Silicon.
+MIT. Haz lo que quieras con ella.
