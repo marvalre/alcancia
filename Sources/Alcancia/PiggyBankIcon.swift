@@ -14,19 +14,24 @@ enum PiggyBankIcon {
     private static let body = CGRect(x: 26, y: 26, width: 56, height: 40)
     private static let snout = CGRect(x: 13, y: 44, width: 17, height: 13)
 
-    private static let earTip = CGPoint(x: 42, y: 13)
-    private static let earFront = CGPoint(x: 46, y: 30)
-    private static let earBack = CGPoint(x: 57, y: 24)
+    private static let earTip = CGPoint(x: 44, y: 16)
+    private static let earFront = CGPoint(x: 46, y: 29)
+    private static let earBack = CGPoint(x: 56, y: 26)
 
     private static let eyeCenter = CGPoint(x: 39, y: 40)
-    private static let eyeRadius: CGFloat = 3.4
+    private static let eyeRadius: CGFloat = 4.2
 
     /// Ranura de la moneda, dibujada dentro del lomo.
     private static let slotStart = CGPoint(x: 58, y: 33)
     private static let slotEnd = CGPoint(x: 69, y: 36)
-    private static let slotWidth: CGFloat = 4.5
+    private static let slotWidth: CGFloat = 6
 
-    private static let strokeWidth: CGFloat = 6
+    private static let strokeWidth: CGFloat = 8.5
+
+    /// Debajo de esta altura la ranura de la moneda se omite: a tamaño de barra
+    /// de menú se funde con la oreja y sólo ensucia la silueta. En el panel de
+    /// escritorio, que es más grande, sí cabe y aporta.
+    private static let slotMinimumHeight: CGFloat = 24
 
     /// - Parameters:
     ///   - progress: nivel de llenado de 0 a 1, o `nil` cuando no hay meta
@@ -37,12 +42,12 @@ enum PiggyBankIcon {
     static func image(
         progress: Double?,
         accessibilityDescription: String,
-        height: CGFloat = 16
+        height: CGFloat = 18
     ) -> NSImage {
         let width = height * designWidth / designHeight
         let image = NSImage(size: NSSize(width: width, height: height), flipped: true) { _ in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
-            draw(in: context, scale: height / designHeight, progress: progress)
+            draw(in: context, scale: height / designHeight, height: height, progress: progress)
             return true
         }
         image.isTemplate = true
@@ -50,7 +55,7 @@ enum PiggyBankIcon {
         return image
     }
 
-    private static func draw(in context: CGContext, scale: CGFloat, progress: Double?) {
+    private static func draw(in context: CGContext, scale: CGFloat, height: CGFloat, progress: Double?) {
         context.saveGState()
         context.scaleBy(x: scale, y: scale)
         context.setStrokeColor(NSColor.black.cgColor)
@@ -75,7 +80,9 @@ enum PiggyBankIcon {
         // cubrió los recortamos para que sigan viéndose en negativo.
         let fillTop = fillTopY(for: progress)
         drawEye(in: context, fillTop: fillTop)
-        drawCoinSlot(in: context, fillTop: fillTop)
+        if height >= slotMinimumHeight {
+            drawCoinSlot(in: context, fillTop: fillTop)
+        }
 
         context.restoreGState()
     }
@@ -133,10 +140,8 @@ enum PiggyBankIcon {
 
     private static func strokeLegs(in context: CGContext) {
         let legs = [
-            (x: CGFloat(38), bottom: CGFloat(70)),
-            (x: CGFloat(50), bottom: CGFloat(73)),
-            (x: CGFloat(61), bottom: CGFloat(73)),
-            (x: CGFloat(73), bottom: CGFloat(70))
+            (x: CGFloat(39), bottom: CGFloat(69)),
+            (x: CGFloat(72), bottom: CGFloat(69))
         ]
         context.saveGState()
         clip(outside: body, in: context)
