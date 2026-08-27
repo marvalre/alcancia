@@ -17,8 +17,16 @@ struct HistoryView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(summary.entriesInMonth) { entry in
-                            row(for: entry)
-                            Divider()
+                            VStack(spacing: 0) {
+                                row(for: entry)
+                                Divider()
+                            }
+                            .transition(
+                                .asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top)),
+                                    removal: .opacity.combined(with: .move(edge: .leading))
+                                )
+                            )
                         }
                     }
                 }
@@ -69,8 +77,11 @@ struct HistoryView: View {
             .controlSize(.small)
 
             Button("Borrar") {
-                store.deleteEntry(id: entry.id)
-                pendingDeleteID = nil
+                // Con resorte y sin rebote: la fila se va, no salta.
+                withAnimation(.spring(response: 0.3, dampingFraction: 1)) {
+                    store.deleteEntry(id: entry.id)
+                    pendingDeleteID = nil
+                }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
@@ -96,6 +107,8 @@ struct HistoryView: View {
                 Text(signedAmount(for: entry))
                     .font(.caption.weight(.medium))
                     .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.3, dampingFraction: 1), value: entry.amountInMXN)
                     .foregroundStyle(entry.kind == .expense ? Color.primary : Color.green)
                 if entry.currency == .usd {
                     Text("USD \(entry.amount.description)")
