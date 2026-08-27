@@ -118,6 +118,54 @@ final class DataExporterTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertFalse(workbook.contains(0x0B))
+        // Buscar el byte 0x0B en el ZIP completo es falso positivo: los
+        // encabezados locales llevan un CRC32 binario de 4 bytes por
+        // archivo, y ese checksum puede coincidir con 0x0B por pura
+        // casualidad sin que el texto del usuario tenga nada que ver.
+        // Se extrae el contenido real (sin comprimir) de sheet1.xml, la
+        // única hoja donde vive el concepto del usuario, y se revisa ahí.
+        let sheet1 = try extractStoredZipEntry(named: "xl/worksheets/sheet1.xml", from: workbook)
+        let xml = String(decoding: sheet1, as: UTF8.self)
+
+        XCTAssertFalse(
+            xml.unicodeScalars.contains(Unicode.Scalar(0x0B)!),
+            "el carácter de control no debió sobrevivir al XML de la hoja"
+        )
+        XCTAssertTrue(xml.contains("Texto no válido"), "el resto del texto sí debe conservarse")
+    }
+
+    /// Extrae el contenido almacenado (sin comprimir) de una entrada del ZIP
+    /// mínimo que produce `ZIPArchiveWriter`. No es un lector ZIP de
+    /// propósito general: sólo entiende el formato exacto (método 0, sin
+    /// campo extra) que el propio escritor genera, leyendo su encabezado
+    /// local de 30 bytes directamente.
+    private func extractStoredZipEntry(named target: String, from archive: Data) throws -> Data {
+        let signature: [UInt8] = [0x50, 0x4B, 0x03, 0x04]
+        var offset = archive.startIndex
+        while offset + 30 <= archive.endIndex {
+            let header = Array(archive[offset..<offset + 30])
+            guard Array(header.prefix(4)) == signature else { break }
+            func u16(_ i: Int) -> Int { Int(header[i]) | (Int(header[i + 1]) << 8) }
+            func u32(_ i: Int) -> Int {
+                Int(header[i]) | (Int(header[i + 1]) << 8) | (Int(header[i + 2]) << 16) | (Int(header[i + 3]) << 24)
+            }
+            let compressedSize = u32(18)
+            let nameLength = u16(26)
+            let extraLength = u16(28)
+            let nameStart = offset + 30
+            let nameEnd = nameStart + nameLength
+            let name = String(decoding: archive[nameStart..<nameEnd], as: UTF8.self)
+            let dataStart = nameEnd + extraLength
+            let dataEnd = dataStart + compressedSize
+            if name == target {
+                return archive[dataStart..<dataEnd]
+            }
+            offset = dataEnd
+        }
+        struct EntryNotFound: Error, CustomStringConvertible {
+            let name: String
+            var description: String { "No se encontró la entrada '\(name)' en el zip" }
+        }
+        throw EntryNotFound(name: target)
     }
 }

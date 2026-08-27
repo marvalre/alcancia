@@ -39,7 +39,13 @@ struct XLSXWriter {
                 stringCell(entry.isBusiness ? "Sí" : "No"),
                 entry.exchangeRateUsed.map { numberCell(Decimal($0)) } ?? stringCell(""),
                 stringCell(entry.recurringExpenseID?.uuidString ?? ""),
-                stringCell(entry.recurringPeriod.map(monthString) ?? "")
+                // Derivado de la fecha real, no de `entry.recurringPeriod`
+                // (una etiqueta que no se actualiza si el movimiento se
+                // edita a otro mes; ver el comentario en
+                // AlcanciaStore.unloggedRecurring).
+                stringCell(entry.recurringExpenseID != nil
+                    ? monthString(MonthKey(date: entry.date, calendar: calendar))
+                    : "")
             ]))
         }
         return worksheet(rows)

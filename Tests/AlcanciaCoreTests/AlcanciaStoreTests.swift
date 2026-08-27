@@ -134,7 +134,9 @@ final class AlcanciaStoreTests: XCTestCase {
 
         let result = store.resetAllEntries()
 
-        XCTAssertEqual(result, .failure(.persistenceFailed))
+        guard case .failure(.persistenceFailed) = result else {
+            return XCTFail("se esperaba .failure(.persistenceFailed), se obtuvo \(result)")
+        }
         XCTAssertTrue(store.data.entries.isEmpty)
     }
 
@@ -142,7 +144,9 @@ final class AlcanciaStoreTests: XCTestCase {
         let url = makeTempFileURL()
         let store = AlcanciaStore(fileURL: url)
 
-        XCTAssertEqual(store.completeOnboarding(balance: 1500, budget: 8000), .success(()))
+        guard case .success = store.completeOnboarding(balance: 1500, budget: 8000) else {
+            return XCTFail("se esperaba que completar el onboarding tuviera éxito")
+        }
         XCTAssertEqual(store.data.balanceAdjustments.count, 1)
         XCTAssertEqual(store.data.monthlyBudgets.count, 1)
 
@@ -159,7 +163,9 @@ final class AlcanciaStoreTests: XCTestCase {
 
         let result = store.completeOnboarding(balance: 1500, budget: 8000)
 
-        XCTAssertEqual(result, .failure(.persistenceFailed))
+        guard case .failure(.persistenceFailed) = result else {
+            return XCTFail("se esperaba .failure(.persistenceFailed), se obtuvo \(result)")
+        }
         XCTAssertTrue(store.data.balanceAdjustments.isEmpty)
         XCTAssertTrue(store.data.monthlyBudgets.isEmpty)
     }

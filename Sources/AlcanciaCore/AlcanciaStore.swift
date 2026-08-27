@@ -313,8 +313,16 @@ public final class AlcanciaStore: ObservableObject {
 
     public func unloggedRecurring(for month: Date) -> [RecurringExpense] {
         let key = MonthKey(date: month, calendar: calendar)
+        // "Ya registrado este mes" se deriva de la fecha REAL del movimiento,
+        // nunca de `recurringPeriod` (una etiqueta grabada al crearlo). Si el
+        // usuario edita la fecha y lo mueve a otro mes, `recurringPeriod` se
+        // queda apuntando al mes viejo — usar esa etiqueta desincroniza el
+        // mes de origen (que lo vuelve a ofrecer como "sin registrar" cuando
+        // ya no debería) del mes de destino (que lo sigue ofreciendo como
+        // pendiente aunque el movimiento ya vive ahí).
         let logged = Set(data.entries.compactMap { entry -> UUID? in
-            entry.recurringPeriod == key ? entry.recurringExpenseID : nil
+            guard let recurringID = entry.recurringExpenseID else { return nil }
+            return MonthKey(date: entry.date, calendar: calendar) == key ? recurringID : nil
         })
         return data.recurringExpenses.filter {
             !logged.contains($0.id) && !(data.skippedRecurringPeriods[$0.id] ?? []).contains(key)
