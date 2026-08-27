@@ -7,6 +7,10 @@ import AlcanciaCore
 struct MonthHeaderView: View {
     @ObservedObject var store: AlcanciaStore
     @Binding var month: Date
+    /// Cierre, no un binding a la bandera cruda: el encabezado no necesita
+    /// saber cómo se representa "mostrando Ajustes" en `MenuBarView`, sólo
+    /// pedir que se abra.
+    let onOpenSettings: () -> Void
 
     private var summary: MonthlySummary { store.summary(for: month) }
     private var progress: BudgetProgress { store.budgetProgress(for: month) }
@@ -48,13 +52,24 @@ struct MonthHeaderView: View {
                     .font(.caption)
                     .foregroundStyle(progress.isOverBudget ? Color.red : Color.secondary)
             } else {
-                Text("Gastado este mes · sin presupuesto definido")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Define tu presupuesto mensual para que el cerdito funcione")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Definir", action: onOpenSettings)
+                        .buttonStyle(.link)
+                        .controlSize(.small)
+                }
             }
 
             if summary.totalIncomeMXN > 0 {
                 Text("Ingresos del mes: \(store.formattedAmount(summary.totalIncomeMXN))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if summary.totalBusinessMXN > 0 {
+                Text("de negocio: \(store.formattedAmount(summary.totalBusinessMXN))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

@@ -23,7 +23,18 @@ struct AlcanciaAppMain: App {
         let store = AlcanciaStore()
         _store = StateObject(wrappedValue: store)
         _desktopPanel = StateObject(wrappedValue: DesktopPanelController(store: store))
-        _quickCapture = StateObject(wrappedValue: QuickCaptureController(store: store))
+        let quickCapture = QuickCaptureController(store: store)
+        _quickCapture = StateObject(wrappedValue: quickCapture)
+
+        // Registrado aquí, no en `.onAppear` del contenido del `MenuBarExtra`:
+        // con `.menuBarExtraStyle(.window)` ese contenido se crea perezosamente
+        // hasta el primer clic en el ícono, así que el atajo global no
+        // funcionaría hasta que el usuario ya hubiera usado el mouse una vez.
+        // `init()` de `App` corre al arrancar, garantizado, así que el atajo
+        // queda vivo desde el primer instante.
+        HotKeyManager.shared.register {
+            quickCapture.toggle()
+        }
     }
 
     /// El cerdito muestra lo que queda del presupuesto del mes en curso:
@@ -37,9 +48,6 @@ struct AlcanciaAppMain: App {
             MenuBarView(store: store)
                 .onAppear {
                     desktopPanel.update(shows: store.data.showsDesktopPanel)
-                    HotKeyManager.shared.register {
-                        quickCapture.toggle()
-                    }
                 }
                 .onChange(of: store.data.showsDesktopPanel) { _, shows in
                     desktopPanel.update(shows: shows)

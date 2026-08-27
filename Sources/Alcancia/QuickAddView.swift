@@ -15,6 +15,7 @@ struct QuickAddView: View {
     @State private var kind: EntryKind = .expense
     @State private var currency: Currency = .mxn
     @State private var category: ExpenseCategory = .otro
+    @State private var isBusiness = false
     @State private var isResolvingRate = false
     @State private var needsManualRate = false
     @State private var manualRateText: String = ""
@@ -85,6 +86,15 @@ struct QuickAddView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(width: 130)
+
+                // Sólo tiene sentido para gastos: un ingreso no es "de negocio".
+                if kind == .expense {
+                    Toggle(isOn: $isBusiness) {
+                        Text("Negocio").font(.caption2)
+                    }
+                    .toggleStyle(.button)
+                    .controlSize(.small)
+                }
             }
 
             if kind == .expense {
@@ -113,6 +123,7 @@ struct QuickAddView: View {
         .padding(.vertical, 10)
         .onAppear {
             category = store.data.lastUsedCategory ?? .otro
+            isBusiness = store.data.lastUsedIsBusiness
             // El foco es la pieza que hace que capturar tome tres segundos.
             amountFocused = true
         }
@@ -172,7 +183,8 @@ struct QuickAddView: View {
             kind: kind,
             category: kind == .expense ? category : nil,
             note: noteText,
-            exchangeRate: rate
+            exchangeRate: rate,
+            isBusiness: isBusiness
         )
         amountText = ""
         noteText = ""

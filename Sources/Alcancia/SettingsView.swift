@@ -14,7 +14,23 @@ struct SettingsView: View {
     @State private var loginItemError: String?
     @State private var confirmingReset = false
 
+    @State private var newRecurringName: String = ""
+    @State private var newRecurringAmountText: String = ""
+    @State private var newRecurringCategory: ExpenseCategory = .otro
+    @State private var newRecurringIsBusiness = false
+    @State private var pendingDeleteRecurringID: UUID?
+
     var body: some View {
+        // Con las suscripciones el contenido ya no cabe en 360×560; sin el
+        // `ScrollView` la parte de abajo (borrar historial, Cerrar) se corta.
+        ScrollView {
+            settingsContent
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear(perform: seedState)
+    }
+
+    private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Ajustes").font(.headline)
 
@@ -57,6 +73,10 @@ struct SettingsView: View {
 
             Divider()
 
+            recurringSection
+
+            Divider()
+
             if confirmingReset {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("¿Borrar todo el historial? Esta acción no se puede deshacer.")
@@ -82,26 +102,147 @@ struct SettingsView: View {
                 }
             }
 
-            Spacer()
-
             Button("Cerrar") { onClose() }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear {
-            if let budget = store.data.monthlyBudgetMXN {
-                budgetText = "\(budget)"
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func seedState() {
+        if let budget = store.data.monthlyBudgetMXN {
+            budgetText = "\(budget)"
+        }
+        showsDesktopPanel = store.data.showsDesktopPanel
+        // Sembramos el interruptor con el estado real del sistema, no la
+        // preferencia guardada, para que no pueda mentir si el registro
+        // había fallado en una sesión anterior.
+        let actual = LoginItemManager.isEnabled
+        launchAtLogin = actual
+        if store.data.launchAtLogin != actual {
+            store.setLaunchAtLogin(actual)
+        }
+    }
+
+    // MARK: - Suscripciones
+
+    /// Se configuran rara vez: sección compacta, sin animaciones de más.
+    private var recurringSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Suscripciones").font(.subheadline)
+
+            if store.data.recurringExpenses.isEmpty {
+                Text("Sin recurrentes configuradas todavía.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(store.data.recurringExpenses) { recurring in
+                    recurringRow(for: recurring)
+                }
             }
-            showsDesktopPanel = store.data.showsDesktopPanel
-            // Sembramos el interruptor con el estado real del sistema, no la
-            // preferencia guardada, para que no pueda mentir si el registro
-            // había fallado en una sesión anterior.
-            let actual = LoginItemManager.isEnabled
-            launchAtLogin = actual
-            if store.data.launchAtLogin != actual {
-                store.setLaunchAtLogin(actual)
+
+            addRecurringRow
+        }
+    }
+
+    /// Mismo patrón que `HistoryView.deleteConfirmation`: la confirmación
+    /// reemplaza la fila en el sitio, nunca un diálogo aparte.
+    private func recurringRow(for recurring: RecurringExpense) -> some View {
+        Group {
+            if pendingDeleteRecurringID == recurring.id {
+                HStack(spacing: 8) {
+                    Text("¿Borrar \(recurring.name)?")
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Spacer(minLength: 4)
+
+                    Button("Cancelar") {
+                        pendingDeleteRecurringID = nil
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button("Borrar") {
+                        store.deleteRecurringExpense(id: recurring.id)
+                        pendingDeleteRecurringID = nil
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(.red)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Text(recurring.category.emoji)
+                    Text(recurring.name)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(store.formattedAmount(recurring.amountMXN))
+                        .font(.caption.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Button {
+                        pendingDeleteRecurringID = recurring.id
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                }
             }
         }
+    }
+
+    private var addRecurringRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                TextField("Nombre (ej. Adobe CC)", text: $newRecurringName)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+                TextField("Monto", text: $newRecurringAmountText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+                    .frame(width: 70)
+            }
+
+            CategoryRowView(selection: $newRecurringCategory)
+
+            HStack {
+                Toggle(isOn: $newRecurringIsBusiness) {
+                    Text("Negocio").font(.caption2)
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+
+                Spacer()
+
+                Button("Agregar", action: addRecurring)
+                    .disabled(!canAddRecurring)
+            }
+        }
+    }
+
+    private var canAddRecurring: Bool {
+        guard !newRecurringName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        guard let amount = Decimal(string: newRecurringAmountText.replacingOccurrences(of: ",", with: "")),
+              amount > 0 else { return false }
+        return true
+    }
+
+    private func addRecurring() {
+        guard canAddRecurring,
+              let amount = Decimal(string: newRecurringAmountText.replacingOccurrences(of: ",", with: "")) else { return }
+        store.addRecurringExpense(
+            name: newRecurringName.trimmingCharacters(in: .whitespacesAndNewlines),
+            amountMXN: amount,
+            category: newRecurringCategory,
+            isBusiness: newRecurringIsBusiness
+        )
+        newRecurringName = ""
+        newRecurringAmountText = ""
+        newRecurringCategory = .otro
+        newRecurringIsBusiness = false
     }
 
     /// El interruptor se maneja con un Binding en vez de @State + .onChange: el
