@@ -101,6 +101,9 @@ alcancia/
 **Requisitos:** macOS 14 (Sonoma) o más nuevo, en una Mac con Apple
 Silicon.
 
+> Guía paso a paso con capturas de pantalla (y video):
+> [`Resources/guia-instalacion/INSTALL.md`](Resources/guia-instalacion/INSTALL.md)
+
 ### Opción A — descargar la app ya compilada
 
 Bájala de la sección [Releases](https://github.com/marvalre/alcancia/releases),
