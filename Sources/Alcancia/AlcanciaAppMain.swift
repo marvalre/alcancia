@@ -51,6 +51,20 @@ struct AlcanciaAppMain: App {
             desktopPanel.update(shows: store.data.showsDesktopPanel)
         }
 
+        // El cerdito y el panel calculan sobre `Date()`. Sin esto, una Mac que
+        // se queda prendida cruzando la medianoche del último día del mes
+        // seguiría mostrando el mes que ya terminó hasta que algún otro cambio
+        // forzara un redibujo. El observador vive lo que vive la app.
+        NotificationCenter.default.addObserver(
+            forName: .NSCalendarDayChanged,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                store.objectWillChange.send()
+            }
+        }
+
         // Registrado aquí, no en `.onAppear` del contenido del `MenuBarExtra`:
         // con `.menuBarExtraStyle(.window)` ese contenido se crea perezosamente
         // hasta el primer clic en el ícono, así que el atajo global no
