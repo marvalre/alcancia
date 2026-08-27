@@ -58,4 +58,27 @@ final class BudgetProgressTests: XCTestCase {
         XCTAssertEqual(progress.fractionRemaining ?? -1, 0.0, accuracy: 0.0001)
         XCTAssertTrue(progress.isOverBudget)
     }
+
+    // MARK: - dailyAllowance
+
+    func testDailyAllowanceIsNilWithoutBudget() {
+        let progress = BudgetProgress(spentMXN: 500, budgetMXN: nil)
+        XCTAssertNil(progress.dailyAllowance(remainingDays: 10))
+    }
+
+    func testDailyAllowanceIsNilWhenOverBudget() {
+        let progress = BudgetProgress(spentMXN: 9000, budgetMXN: 8000)
+        XCTAssertNil(progress.dailyAllowance(remainingDays: 10))
+    }
+
+    func testDailyAllowanceIsNilWithZeroOrNegativeDays() {
+        let progress = BudgetProgress(spentMXN: 5000, budgetMXN: 8000)
+        XCTAssertNil(progress.dailyAllowance(remainingDays: 0))
+        XCTAssertNil(progress.dailyAllowance(remainingDays: -3))
+    }
+
+    func testDailyAllowanceSplitsRemainingAcrossDays() {
+        let progress = BudgetProgress(spentMXN: 5000, budgetMXN: 8000)
+        XCTAssertEqual(progress.dailyAllowance(remainingDays: 10), 300)
+    }
 }

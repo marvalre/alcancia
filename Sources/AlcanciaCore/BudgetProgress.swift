@@ -49,4 +49,11 @@ public struct BudgetProgress {
         let scaled = min((value * 100).rounded(), 999_999_999_999)
         return "\(Int(max(scaled, 0)))%"
     }
+
+    /// Cuánto puedes gastar por día con lo que queda, incluyendo hoy.
+    /// `nil` sin presupuesto, o si ya te pasaste.
+    public func dailyAllowance(remainingDays: Int) -> Decimal? {
+        guard !isOverBudget, remainingDays > 0, let remainingMXN else { return nil }
+        return remainingMXN / Decimal(remainingDays)
+    }
 }

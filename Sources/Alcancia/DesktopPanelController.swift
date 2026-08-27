@@ -12,6 +12,14 @@ final class DesktopPanelController: ObservableObject {
     private let store: AlcanciaStore
     private var frameObserver: NSObjectProtocol?
 
+    /// Se dispara cuando el usuario hace clic en el panel. `AlcanciaAppMain`
+    /// lo conecta a `quickCapture.toggle()` para que el panel funcione como
+    /// acceso directo permanente a "agregar gasto" — el punto fuerte de un
+    /// widget de escritorio. Es una propiedad (no un parámetro de `init`)
+    /// porque `QuickCaptureController` se crea aparte, con el mismo store, y
+    /// se conecta después de que ambos existen.
+    var onActivate: (() -> Void)?
+
     init(store: AlcanciaStore) {
         self.store = store
     }
@@ -30,8 +38,10 @@ final class DesktopPanelController: ObservableObject {
             return
         }
 
-        let hosting = NSHostingController(rootView: DesktopPanelView(store: store))
-        hosting.view.frame = NSRect(x: 0, y: 0, width: 210, height: 62)
+        let hosting = NSHostingController(rootView: DesktopPanelView(store: store, onActivate: { [weak self] in
+            self?.onActivate?()
+        }))
+        hosting.view.frame = NSRect(x: 0, y: 0, width: 240, height: 110)
 
         let panel = NSPanel(
             contentRect: hosting.view.frame,
