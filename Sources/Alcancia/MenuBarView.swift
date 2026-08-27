@@ -18,6 +18,17 @@ struct MenuBarView: View {
     private var summary: MonthlySummary { store.summary(for: month) }
 
     var body: some View {
+        Group {
+            if showingSettings {
+                SettingsView(store: store, onClose: { showingSettings = false })
+            } else {
+                mainContent
+            }
+        }
+        .frame(width: 360, height: 560)
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             MonthHeaderView(store: store, month: $month)
             Divider()
@@ -43,10 +54,6 @@ struct MenuBarView: View {
 
             Divider()
             footer
-        }
-        .frame(width: 360, height: 560)
-        .sheet(isPresented: $showingSettings) {
-            SettingsView(store: store)
         }
     }
 

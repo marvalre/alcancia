@@ -4,13 +4,15 @@ import AlcanciaCore
 
 struct SettingsView: View {
     @ObservedObject var store: AlcanciaStore
-    @Environment(\.dismiss) private var dismiss
+    /// Se cierra volviendo a la vista principal dentro del mismo panel, no
+    /// descartando una hoja: en la barra de menú no puede haber otra ventana.
+    let onClose: () -> Void
 
     @State private var budgetText: String = ""
     @State private var launchAtLogin: Bool = false
     @State private var showsDesktopPanel: Bool = false
     @State private var loginItemError: String?
-    @State private var showingResetConfirmation = false
+    @State private var confirmingReset = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -55,25 +57,37 @@ struct SettingsView: View {
 
             Divider()
 
-            Button("Borrar todo el historial", role: .destructive) {
-                showingResetConfirmation = true
-            }
-            .confirmationDialog(
-                "¿Borrar todo el historial? Esta acción no se puede deshacer.",
-                isPresented: $showingResetConfirmation
-            ) {
-                Button("Borrar todo", role: .destructive) {
-                    store.resetAllEntries()
+            if confirmingReset {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("¿Borrar todo el historial? Esta acción no se puede deshacer.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                    HStack {
+                        Button("Cancelar") {
+                            confirmingReset = false
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Borrar todo") {
+                            store.resetAllEntries()
+                            confirmingReset = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    }
                 }
-                Button("Cancelar", role: .cancel) {}
+            } else {
+                Button("Borrar todo el historial", role: .destructive) {
+                    confirmingReset = true
+                }
             }
 
             Spacer()
 
-            Button("Cerrar") { dismiss() }
+            Button("Cerrar") { onClose() }
         }
         .padding(20)
-        .frame(width: 320, height: 430)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             if let budget = store.data.monthlyBudgetMXN {
                 budgetText = "\(budget)"

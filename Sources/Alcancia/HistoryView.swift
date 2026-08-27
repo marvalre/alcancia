@@ -25,25 +25,6 @@ struct HistoryView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        .confirmationDialog(
-            "¿Borrar este movimiento?",
-            isPresented: Binding(
-                get: { pendingDeleteID != nil },
-                set: { isPresented in
-                    if !isPresented { pendingDeleteID = nil }
-                }
-            )
-        ) {
-            Button("Borrar", role: .destructive) {
-                if let id = pendingDeleteID {
-                    store.deleteEntry(id: id)
-                }
-                pendingDeleteID = nil
-            }
-            Button("Cancelar", role: .cancel) {
-                pendingDeleteID = nil
-            }
-        }
     }
 
     private var emptyState: some View {
@@ -58,6 +39,46 @@ struct HistoryView: View {
     }
 
     private func row(for entry: Entry) -> some View {
+        Group {
+            if pendingDeleteID == entry.id {
+                deleteConfirmation(for: entry)
+            } else {
+                contentRow(for: entry)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+    }
+
+    /// La confirmación va dentro de la propia fila. Un diálogo aparte abriría
+    /// otra ventana, y el panel de la barra de menú se cierra en cuanto pierde
+    /// el foco — se llevaría el diálogo con él antes de que se pueda contestar.
+    private func deleteConfirmation(for entry: Entry) -> some View {
+        HStack(spacing: 8) {
+            Text("¿Borrar \(title(for: entry))?")
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 4)
+
+            Button("Cancelar") {
+                pendingDeleteID = nil
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button("Borrar") {
+                store.deleteEntry(id: entry.id)
+                pendingDeleteID = nil
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(.red)
+        }
+    }
+
+    private func contentRow(for entry: Entry) -> some View {
         HStack(spacing: 8) {
             Text(entry.kind == .expense ? (entry.category ?? .otro).emoji : "💰")
 
@@ -91,8 +112,6 @@ struct HistoryView: View {
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
     }
 
     private func title(for entry: Entry) -> String {
