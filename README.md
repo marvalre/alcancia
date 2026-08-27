@@ -18,26 +18,40 @@ Cualquier función que rompa esa regla se corta, por útil que parezca.
 - **Vive en la barra de menú**, sin ícono en el Dock. El cerdito arranca
   lleno cada mes y se vacía conforme gastas — un vistazo responde "¿cómo
   voy?" sin abrir nada ni leer un número.
-- **Atajo global ⌥⌘A** que abre una ventanita mínima de captura desde
-  donde estés. Enter guarda, Escape cancela.
-- **Presupuesto mensual.** La app te dice cuánto llevas, cuánto queda, y
-  se pone roja si te pasas.
+- **Atajo global configurable** que abre una ventanita mínima de captura
+  desde donde estés. Enter guarda, Escape cancela.
+- **Saldo real que continúa entre meses.** En el primer arranque indicas
+  cuánto dinero tienes hoy. El cierre de un mes es automáticamente la
+  apertura del siguiente, y puedes corregir el saldo total desde Ajustes
+  si olvidaste o registraste mal algún movimiento.
+- **Presupuesto por mes.** La app te dice cuánto llevas, cuánto queda, y
+  se pone roja si te pasas. Cambiar el presupuesto de septiembre no
+  modifica agosto.
 - **Cuánto puedes gastar por día** con lo que queda del mes. Convierte un
   saldo abstracto en una decisión que puedes tomar en la taquería.
 - **Ocho categorías** con emoji, a un clic: comida, súper, transporte,
   casa, software, ocio, salud, otro.
 - **Gastos recurrentes.** Defines tus suscripciones una vez; cada mes la
-  app te avisa cuáles faltan por registrar y las anota todas de un clic.
-  Nunca las registra sola, para que no aparezcan duplicados.
+  app te avisa cuáles faltan por registrar. Puedes anotarlas todas de un
+  clic u omitir una sólo durante ese mes. Nunca las registra sola y cada
+  recurrente conserva una identidad propia para evitar duplicados.
 - **Negocio o personal** por movimiento, para separar lo deducible.
 - **Vista por mes** con navegación hacia atrás, desglose por categoría, y
   una gráfica de los últimos seis meses.
+- **Historial editable**, con búsqueda, filtros por tipo, categoría y
+  negocio/personal, además de deshacer después de editar o borrar.
 - **Ingresos** también, con conversión automática USD→MXN al capturar
   (tipo de cambio en vivo, con respaldo del último conocido si no hay
   internet).
 - **Panel flotante** opcional en el escritorio, arrastrable, que recuerda
   dónde lo dejaste. Un clic en él abre la captura rápida.
 - **Iniciar con el sistema**, opcional.
+- **Exportación completa** a CSV, JSON y Excel (`.xlsx`) desde Ajustes.
+- **Copias de seguridad y recuperación local.** Cada guardado conserva
+  hasta cinco respaldos. Si el archivo principal se daña, Alcancía carga
+  el respaldo válido más reciente; si ninguno sirve, preserva el archivo
+  original y muestra una pantalla de recuperación antes de permitir más
+  cambios.
 
 ## Sobre el widget
 
@@ -63,17 +77,18 @@ dentro del mismo panel.
 Tus movimientos nunca salen de tu Mac. No hay cuenta, no hay servidor, no
 hay telemetría, y no hay forma de que alguien más los vea.
 
-Todo se guarda en un solo archivo de texto que puedes abrir tú mismo:
+El archivo principal se guarda como texto y puedes abrirlo tú mismo:
 
 ```bash
 cat ~/Library/Application\ Support/Alcancia/data.json
 ```
 
-La app hace **exactamente una** llamada de red en toda su vida: consultar
-el tipo de cambio USD→MXN en `api.frankfurter.app` (API pública y
-gratuita, sin llave), y sólo cuando capturas un movimiento en dólares. No
-manda nada — sólo pregunta cuánto vale el dólar. Si no tienes internet,
-usa el último tipo de cambio que guardó y te lo dice.
+La única comunicación de red de la app es consultar el tipo de cambio
+USD→MXN en `api.frankfurter.app` (API pública y gratuita, sin llave), y
+sólo cuando capturas o editas un movimiento en dólares que necesita una
+tasa. No manda tus movimientos: sólo pregunta cuánto vale el dólar. Si
+no tienes internet, usa el último tipo de cambio válido que guardó; si no
+existe uno, no inventa una conversión y te pide una tasa manual.
 
 No tienes que creerme: es la única URL en el código, y la puedes ver aquí:
 
@@ -136,15 +151,18 @@ que Gatekeeper la deje correr localmente.
 app de barra de menú. Busca el cerdito arriba a la derecha, junto al wifi
 y la batería.
 
-Lo primero que conviene hacer es abrir Ajustes (el engrane) y **definir tu
-presupuesto mensual**. Sin eso el cerdito se queda vacío y la mitad de la
-app no tiene de qué agarrarse.
+La primera vez, Alcancía te pide el **saldo total que tienes hoy** y el
+presupuesto del mes. Puedes omitirlo y configurarlo después en Ajustes.
+El saldo admite cero o deuda y se puede corregir en cualquier momento.
+
+En **Ajustes** también puedes cambiar el atajo global, exportar todos tus
+datos en CSV, JSON o Excel y consultar las opciones de recuperación.
 
 ## Desarrollo
 
 ```bash
 swift build          # compilar
-swift test           # 61 pruebas sobre AlcanciaCore
+swift test           # suite completa de AlcanciaCore
 swift run Alcancia   # correr sin empaquetar
 ```
 

@@ -15,9 +15,10 @@ struct QuickCaptureView: View {
     @State private var amountText: String = ""
     @State private var noteText: String = ""
     @State private var category: ExpenseCategory = .otro
+    @State private var errorMessage: String?
 
     private var parsedAmount: Decimal? {
-        Decimal(string: amountText.replacingOccurrences(of: ",", with: ""))
+        MoneyParser.parse(amountText)
     }
 
     private var canSubmit: Bool {
@@ -40,6 +41,10 @@ struct QuickCaptureView: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.caption)
                     .onSubmit(submit)
+
+                if let errorMessage {
+                    Text(errorMessage).font(.caption2).foregroundStyle(.red)
+                }
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
@@ -50,6 +55,7 @@ struct QuickCaptureView: View {
             Button("", action: onFinished)
                 .keyboardShortcut(.cancelAction)
                 .opacity(0)
+                .accessibilityHidden(true)
         }
         .frame(width: 360, height: 150)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
@@ -62,7 +68,9 @@ struct QuickCaptureView: View {
 
     private func submit() {
         guard canSubmit, let amount = parsedAmount else { return }
-        store.addEntry(amount: amount, currency: .mxn, category: category, note: noteText)
-        onFinished()
+        switch store.addEntryResult(amount: amount, currency: .mxn, category: category, note: noteText) {
+        case .success: onFinished()
+        case .failure: errorMessage = "No se pudo guardar. Abre Ajustes para recuperar tus datos."
+        }
     }
 }

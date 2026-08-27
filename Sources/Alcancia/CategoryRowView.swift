@@ -32,6 +32,9 @@ struct CategoryRowView: View {
                 }
                 .buttonStyle(.plain)
                 .help(category.label)
+                .accessibilityLabel(category.label)
+                .accessibilityValue(selection == category ? "Seleccionada" : "")
+                .accessibilityAddTraits(selection == category ? .isSelected : [])
             }
         }
     }

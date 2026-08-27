@@ -6,27 +6,48 @@ import AlcanciaCore
 struct HistoryView: View {
     @ObservedObject var store: AlcanciaStore
     let summary: MonthlySummary
+    var filter = EntryFilter()
 
     @State private var pendingDeleteID: UUID?
+    @State private var editingID: UUID?
+    @State private var undoAction: UndoAction?
+    @State private var operationError: String?
 
     var body: some View {
-        Group {
-            if summary.entriesInMonth.isEmpty {
-                emptyState
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(summary.entriesInMonth) { entry in
-                            VStack(spacing: 0) {
-                                row(for: entry)
-                                Divider()
-                            }
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .top)),
-                                    removal: .opacity.combined(with: .move(edge: .leading))
+        VStack(spacing: 0) {
+            if let undoAction {
+                HStack {
+                    Text(undoAction.message).font(.caption)
+                    Spacer()
+                    Button("Deshacer") { undo(undoAction) }
+                        .buttonStyle(.borderless)
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(Color.accentColor.opacity(0.12))
+            }
+            if let operationError {
+                Text(operationError).font(.caption).foregroundStyle(.red).padding(.horizontal, 14)
+            }
+            Group {
+                if visibleEntries.isEmpty {
+                    emptyState
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(visibleEntries) { entry in
+                                VStack(spacing: 0) {
+                                    row(for: entry)
+                                    Divider()
+                                }
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .opacity.combined(with: .move(edge: .top)),
+                                        removal: .opacity.combined(with: .move(edge: .leading))
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -35,10 +56,14 @@ struct HistoryView: View {
         .frame(maxHeight: .infinity)
     }
 
+    private var visibleEntries: [Entry] {
+        filter.apply(to: summary.entriesInMonth)
+    }
+
     private var emptyState: some View {
         VStack {
             Spacer()
-            Text("Sin movimientos este mes")
+            Text(summary.entriesInMonth.isEmpty ? "Sin movimientos este mes" : "Sin resultados")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -50,6 +75,16 @@ struct HistoryView: View {
         Group {
             if pendingDeleteID == entry.id {
                 deleteConfirmation(for: entry)
+            } else if editingID == entry.id {
+                EntryEditorView(
+                    store: store,
+                    entry: entry,
+                    onCancel: { editingID = nil },
+                    onSaved: { original, _ in
+                        undoAction = UndoAction(entry: original, kind: .restoreEdit)
+                        editingID = nil
+                    }
+                )
             } else {
                 contentRow(for: entry)
             }
@@ -80,6 +115,11 @@ struct HistoryView: View {
                 // Con resorte y sin rebote: la fila se va, no salta.
                 withAnimation(.spring(response: 0.3, dampingFraction: 1)) {
                     store.deleteEntry(id: entry.id)
+                    if !store.data.entries.contains(where: { $0.id == entry.id }) {
+                        undoAction = UndoAction(entry: entry, kind: .restoreDeletion)
+                    } else {
+                        operationError = "No se pudo borrar el movimiento."
+                    }
                     pendingDeleteID = nil
                 }
             }
@@ -118,13 +158,45 @@ struct HistoryView: View {
             }
 
             Button {
+                editingID = entry.id
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Editar \(title(for: entry))")
+
+            Button {
                 pendingDeleteID = entry.id
             } label: {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
+            .accessibilityLabel("Borrar \(title(for: entry))")
         }
+    }
+
+    private func undo(_ action: UndoAction) {
+        let result: Result<Void, StoreError>
+        switch action.kind {
+        case .restoreDeletion: result = store.restoreEntry(action.entry)
+        case .restoreEdit: result = store.updateEntry(action.entry)
+        }
+        switch result {
+        case .success:
+            undoAction = nil
+            operationError = nil
+        case .failure:
+            operationError = "No se pudo deshacer el último cambio."
+        }
+    }
+
+    private struct UndoAction {
+        enum Kind { case restoreDeletion, restoreEdit }
+        let entry: Entry
+        let kind: Kind
+        var message: String { kind == .restoreDeletion ? "Movimiento borrado" : "Movimiento editado" }
     }
 
     private func title(for entry: Entry) -> String {

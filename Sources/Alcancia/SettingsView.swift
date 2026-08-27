@@ -4,15 +4,20 @@ import AlcanciaCore
 
 struct SettingsView: View {
     @ObservedObject var store: AlcanciaStore
+    @ObservedObject private var hotKeyManager = HotKeyManager.shared
+    let month: Date
     /// Se cierra volviendo a la vista principal dentro del mismo panel, no
     /// descartando una hoja: en la barra de menú no puede haber otra ventana.
     let onClose: () -> Void
 
     @State private var budgetText: String = ""
+    @State private var balanceText: String = ""
     @State private var launchAtLogin: Bool = false
     @State private var showsDesktopPanel: Bool = false
     @State private var showsBalance: Bool = false
     @State private var loginItemError: String?
+    @State private var hotKeyShortcut: HotKeyShortcut = .saved
+    @State private var dataMessage: String?
     @State private var confirmingReset = false
 
     @State private var newRecurringName: String = ""
@@ -35,6 +40,22 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Ajustes").font(.headline)
 
+            if store.status != .healthy {
+                recoverySection
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Saldo total actual (MXN)").font(.subheadline)
+                HStack {
+                    TextField("ej. 1500", text: $balanceText)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Ajustar", action: saveBalance)
+                }
+                Text("Crea un ajuste fechado hoy; no reescribe los meses anteriores.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             VStack(alignment: .leading, spacing: 6) {
                 Text("Presupuesto mensual (MXN)").font(.subheadline)
                 HStack {
@@ -42,9 +63,9 @@ struct SettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .onSubmit(saveBudget)
                     Button("Guardar", action: saveBudget)
-                    if store.data.monthlyBudgetMXN != nil {
+                    if store.budget(for: month) != nil {
                         Button("Quitar") {
-                            store.setMonthlyBudget(nil)
+                            _ = store.setBudget(nil, for: month)
                             budgetText = ""
                         }
                         .foregroundStyle(.red)
@@ -82,6 +103,29 @@ struct SettingsView: View {
                 Text(loginItemError).font(.caption).foregroundStyle(.red)
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Picker("Atajo de captura", selection: $hotKeyShortcut) {
+                    ForEach(HotKeyShortcut.allCases) { shortcut in
+                        Text(shortcut.label).tag(shortcut)
+                    }
+                }
+                .onChange(of: hotKeyShortcut) { _, shortcut in
+                    _ = hotKeyManager.register(shortcut: shortcut)
+                }
+
+                if let error = hotKeyManager.registrationError {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                } else {
+                    Text("Abre la captura rápida desde cualquier app.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Divider()
+
+            exportSection
+
             Divider()
 
             recurringSection
@@ -100,8 +144,13 @@ struct SettingsView: View {
                         .buttonStyle(.bordered)
 
                         Button("Borrar todo") {
-                            store.resetAllEntries()
-                            confirmingReset = false
+                            switch store.resetAllEntries() {
+                            case .success:
+                                confirmingReset = false
+                                dataMessage = "Historial borrado."
+                            case .failure:
+                                dataMessage = "No se pudo borrar el historial. Tus datos no se modificaron."
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
@@ -120,11 +169,11 @@ struct SettingsView: View {
     }
 
     private func seedState() {
-        if let budget = store.data.monthlyBudgetMXN {
-            budgetText = "\(budget)"
-        }
+        if let budget = store.budget(for: month) { budgetText = "\(budget)" }
+        balanceText = "\(store.balanceMXN)"
         showsDesktopPanel = store.data.showsDesktopPanel
         showsBalance = store.data.showsBalance
+        hotKeyShortcut = .saved
         // Sembramos el interruptor con el estado real del sistema, no la
         // preferencia guardada, para que no pueda mentir si el registro
         // había fallado en una sesión anterior.
@@ -237,24 +286,29 @@ struct SettingsView: View {
 
     private var canAddRecurring: Bool {
         guard !newRecurringName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        guard let amount = Decimal(string: newRecurringAmountText.replacingOccurrences(of: ",", with: "")),
-              amount > 0 else { return false }
+        guard MoneyParser.parse(newRecurringAmountText) != nil else { return false }
         return true
     }
 
     private func addRecurring() {
         guard canAddRecurring,
-              let amount = Decimal(string: newRecurringAmountText.replacingOccurrences(of: ",", with: "")) else { return }
-        store.addRecurringExpense(
+              let amount = MoneyParser.parse(newRecurringAmountText) else { return }
+        let result = store.addRecurringExpense(
             name: newRecurringName.trimmingCharacters(in: .whitespacesAndNewlines),
             amountMXN: amount,
             category: newRecurringCategory,
             isBusiness: newRecurringIsBusiness
         )
-        newRecurringName = ""
-        newRecurringAmountText = ""
-        newRecurringCategory = .otro
-        newRecurringIsBusiness = false
+        switch result {
+        case .success:
+            newRecurringName = ""
+            newRecurringAmountText = ""
+            newRecurringCategory = .otro
+            newRecurringIsBusiness = false
+            dataMessage = "Suscripción agregada."
+        case .failure:
+            dataMessage = "No se pudo guardar la suscripción. Tus datos no se modificaron."
+        }
     }
 
     /// El interruptor se maneja con un Binding en vez de @State + .onChange: el
@@ -282,9 +336,65 @@ struct SettingsView: View {
     }
 
     private func saveBudget() {
-        guard let value = Decimal(string: budgetText.replacingOccurrences(of: ",", with: "")),
-              value > 0 else { return }
-        store.setMonthlyBudget(value)
+        guard let value = MoneyParser.parse(budgetText) else { return }
+        if case .failure = store.setBudget(value, for: month) {
+            dataMessage = "No se pudo guardar el presupuesto."
+        } else {
+            dataMessage = "Presupuesto guardado para este mes."
+        }
+    }
+
+    private func saveBalance() {
+        guard let value = MoneyParser.parseBalance(balanceText) else { return }
+        if case .failure = store.setBalance(value, note: "Ajuste manual") {
+            dataMessage = "No se pudo ajustar el saldo."
+        } else {
+            balanceText = "\(store.balanceMXN)"
+            dataMessage = "Saldo ajustado desde hoy."
+        }
+    }
+
+    private var exportSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Exportar").font(.subheadline)
+            HStack {
+                exportButton("CSV", format: .csv)
+                exportButton("JSON", format: .json)
+                exportButton("Excel", format: .xlsx)
+            }
+            if let dataMessage {
+                Text(dataMessage).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func exportButton(_ title: String, format: DataExportFormat) -> some View {
+        Button(title) {
+            switch ExportController.export(data: store.data, format: format) {
+            case .success(let url): dataMessage = "Exportado: \(url.lastPathComponent)"
+            case .failure(let error) where error is CancellationError: break
+            case .failure: dataMessage = "No se pudo exportar el archivo."
+            }
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var recoverySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(store.status == .recoveredFromBackup
+                 ? "Se cargó un respaldo porque el archivo principal no era legible."
+                 : "El archivo de datos no se pudo leer. Alcancía evitó reemplazarlo.")
+                .font(.caption)
+                .foregroundStyle(.orange)
+            Button("Recuperar último respaldo") {
+                if case .success = store.restoreLatestBackup() {
+                    dataMessage = "Respaldo recuperado."
+                } else {
+                    dataMessage = "No hay un respaldo recuperable."
+                }
+            }
+            .disabled(store.status == .recoveredFromBackup)
+        }
     }
 
     private func exchangeRateText(rate: Double, date: Date?) -> String {

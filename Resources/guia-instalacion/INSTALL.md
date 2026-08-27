@@ -51,25 +51,30 @@ batería.
 
 ![La app funcionando: captura rápida, categorías, historial](4-app-funcionando.png)
 
-Empieza por definir tu **presupuesto mensual** (el link "Definir" que
-aparece cuando no tienes uno) — sin eso el cerdito se queda vacío y no
-tiene de qué agarrarse.
+La primera vez, Alcancía te pregunta cuál es tu **saldo total hoy** y el
+presupuesto del mes. Ese saldo es la base: ingresos y gastos se aplican a
+partir de ahí, y el cierre de cada mes pasa al siguiente. Puedes omitir
+este paso o corregir el saldo después desde **Ajustes**.
 
 Para capturar un gasto sin tocar el mouse: **⌥⌘A** desde cualquier
-parte del sistema.
+parte del sistema. Puedes cambiar esa combinación en **Ajustes**.
+
+Desde **Ajustes** también puedes exportar una copia completa en CSV,
+JSON o Excel (`.xlsx`). Alcancía mantiene hasta cinco respaldos locales y
+te guía para recuperar el último válido si detecta datos dañados.
 
 ## Permisos que te va a pedir
 
 | Cuándo aparece | Para qué es |
 |---|---|
 | Al activar "Iniciar con el sistema" | Elementos de inicio — para que abra sola al prender la Mac |
-| Al usar el atajo global ⌥⌘A | Ninguno — usa un atajo de teclado clásico (Carbon), no necesita permiso de Accesibilidad |
+| Al usar el atajo global | Ninguno — usa un atajo de teclado clásico (Carbon), no necesita permiso de Accesibilidad |
 
-Todo se procesa **en tu Mac**. Alcancía sólo hace una llamada de red en
-toda su vida: consultar el tipo de cambio del dólar cuando capturas un
-gasto en USD (`api.frankfurter.app`, pública, sin cuenta ni llave). No
-manda tus movimientos a ningún lado — puedes comprobarlo leyendo el
-archivo donde se guardan:
+Todo se procesa **en tu Mac**. La única comunicación de red de Alcancía
+es consultar el tipo de cambio del dólar cuando un movimiento en USD lo
+necesita (`api.frankfurter.app`, pública, sin cuenta ni llave). No manda
+tus movimientos a ningún lado — puedes comprobarlo leyendo el archivo
+donde se guardan:
 
 ```bash
 cat ~/Library/Application\ Support/Alcancia/data.json
@@ -82,5 +87,8 @@ cat ~/Library/Application\ Support/Alcancia/data.json
 - **No aparece nada en la barra de menú** → revisa en el Monitor de
   Actividad que "Alcancia" esté corriendo; si no, ábrela de nuevo desde
   Aplicaciones.
-- **El atajo ⌥⌘A no responde** → ciérrala y ábrela de nuevo; el atajo
-  se registra al arrancar.
+- **El atajo no responde** → prueba otra combinación en Ajustes; la app
+  muestra si macOS no pudo registrarla porque otra aplicación ya la usa.
+- **Alcancía detectó datos dañados** → no sobrescribe el original. Usa la
+  pantalla de recuperación para restaurar el respaldo válido más reciente
+  o exportar/conservar el archivo antes de decidir qué hacer.

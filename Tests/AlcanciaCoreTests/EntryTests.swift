@@ -42,6 +42,24 @@ final class EntryTests: XCTestCase {
         XCTAssertTrue(decoded.isBusiness)
     }
 
+    func testEntryRoundTripsRecurringIdentityAndPeriod() throws {
+        let recurringID = UUID()
+        let entry = Entry(
+            amount: 399,
+            currency: .mxn,
+            amountInMXN: 399,
+            recurringExpenseID: recurringID,
+            recurringPeriod: MonthKey(year: 2026, month: 8)
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoded = try makeDecoder().decode(Entry.self, from: encoder.encode(entry))
+
+        XCTAssertEqual(decoded.recurringExpenseID, recurringID)
+        XCTAssertEqual(decoded.recurringPeriod, MonthKey(year: 2026, month: 8))
+    }
+
     /// Un archivo que ya conoce `kind`/`category`/`note` pero es de antes de
     /// que existiera el interruptor de negocio debe leer `isBusiness` como
     /// `false`, no fallar.
